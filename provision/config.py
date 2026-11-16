@@ -1,0 +1,96 @@
+"""Horus deployment settings, read from the environment (and an optional .env).
+
+Real environment variables win over .env, so Workbench project variables always
+take precedence over a file someone left in the project.
+"""
+from __future__ import annotations
+
+import os
+import re
+from dataclasses import dataclass, field
+from typing import List, Optional
+
+INSTANCE_RE = re.compile(r"^[a-z][a-z0-9]{1,11}$")
+
+
+def load_dotenv(path: str) -> None:
+    if not os.path.isfile(path):
+        return
+    with open(path) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, val = line.split("=", 1)
+            os.environ.setdefault(key.strip(), val.strip().strip('"').strip("'"))
+
+
+def _env(name: str, default: Optional[str] = None) -> Optional[str]:
+    val = os.environ.get(name, "").strip()
+    return val or default
+
+
+@dataclass
+class Config:
+    instance: str
+    environment: str
+    kafka_datahub: str
+    kafka_definition: Optional[str]      # None -> pick to match the Data Lake runtime
+    nifi_datahub: str
+    impala_vw: Optional[str]
+    workbench: Optional[str]
+    workload_user: Optional[str]
+    workload_password: Optional[str] = field(repr=False, default=None)
+    problems: List[str] = field(default_factory=list)
+
+    # Names derived from the instance -- one place, so teams never collide.
+    @property
+    def topic(self) -> str:
+        return f"horus-{self.instance}-events"
+
+    @property
+    def database(self) -> str:
+        return f"horus_{self.instance}"
+
+    @property
+    def table(self) -> str:
+        return "events_iceberg"
+
+    @property
+    def parameter_context(self) -> str:
+        return f"Horus-{self.instance}"
+
+    @property
+    def gateway_group(self) -> str:
+        return f"horus-{self.instance}-feeds-gateway"
+
+    @property
+    def lakehouse_group(self) -> str:
+        return f"horus-{self.instance}-lakehouse"
+
+
+def load(dotenv_path: str = ".env") -> Config:
+    load_dotenv(dotenv_path)
+    problems: List[str] = []
+
+    instance = (_env("HORUS_INSTANCE") or "").lower()
+    if not INSTANCE_RE.match(instance):
+        problems.append(
+            "HORUS_INSTANCE must be 2-12 chars, lowercase letters/digits, starting with a letter "
+            f"(got {instance!r})")
+    environment = _env("HORUS_ENVIRONMENT")
+    if not environment:
+        problems.append("HORUS_ENVIRONMENT is not set (the CDP environment name)")
+
+    return Config(
+        instance=instance,
+        environment=environment or "",
+        kafka_datahub=_env("HORUS_KAFKA_DATAHUB", f"horus-{instance}-kafka"),
+        kafka_definition=_env("HORUS_KAFKA_DEFINITION"),
+        nifi_datahub=_env("HORUS_NIFI_DATAHUB", f"horus-{instance}-nifi"),
+        impala_vw=_env("HORUS_IMPALA_VW"),
+        workbench=_env("HORUS_WORKBENCH"),
+        workload_user=_env("HORUS_WORKLOAD_USER"),
+        workload_password=_env("HORUS_WORKLOAD_PASSWORD"),
+        problems=problems,
+    )
