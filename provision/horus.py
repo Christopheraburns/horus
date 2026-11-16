@@ -37,6 +37,7 @@ class Report:
         self.planned_hubs: List[Dict[str, str]] = []
         self.hubs: Dict[str, Optional[dict]] = {}
         self.nifi_api: Optional[str] = None
+        self.ssb_api: Optional[str] = None
         self.env_name = ""
         self.owner = ""
 
@@ -152,7 +153,8 @@ def status(cfg: cfgmod.Config) -> Report:
                            "Streaming Analytics Light Duty", env, runtime, definitions)
     rep.hubs["flink"] = flink
     if flink:
-        ssb = _endpoint(flink, "SSB_SSE_UI", api=False) or _endpoint(flink, "SSB_SSE_UI")
+        ssb = _endpoint(flink, "STREAMING_SQL_ENGINE")
+        rep.ssb_api = ssb
         rep.rows[-1]["detail"] += f"; SSB {ssb or 'endpoint not found'}"
 
     # NiFi Data Hub (re-used)
