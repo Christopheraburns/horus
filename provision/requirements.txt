@@ -1,1 +1,5 @@
 cdpcli
+certifi
+requests
+confluent-kafka
+trino==0.340.0

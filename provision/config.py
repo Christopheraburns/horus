@@ -43,6 +43,9 @@ class Config:
     workbench: Optional[str]
     workload_user: Optional[str]
     workload_password: Optional[str] = field(repr=False, default=None)
+    aisstream_api_key: Optional[str] = field(repr=False, default=None)
+    http_contact: Optional[str] = None
+    lake_catalog: str = "iceberg"
     problems: List[str] = field(default_factory=list)
 
     # Names derived from the instance -- one place, so teams never collide.
@@ -96,5 +99,8 @@ def load(dotenv_path: str = ".env") -> Config:
         workbench=_env("HORUS_WORKBENCH"),
         workload_user=_env("HORUS_WORKLOAD_USER"),
         workload_password=_env("HORUS_WORKLOAD_PASSWORD"),
+        aisstream_api_key=_env("HORUS_AISSTREAM_API_KEY"),
+        http_contact=_env("HORUS_HTTP_CONTACT"),
+        lake_catalog=_env("LAKE_CATALOG", "iceberg"),
         problems=problems,
     )

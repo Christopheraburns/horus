@@ -2,10 +2,15 @@
 """horus provision -- set up a Horus deployment in a CDP environment.
 
     python provision/horus.py status [--json] [--env-file .env]
+    python provision/horus.py create [--yes] [--wait]
 
 `status` is read-only: it calls only describe/list CDP APIs, never starts a
 stopped Data Hub or wakes a suspended virtual warehouse, and prints the values
 the Feeds-Gateway needs.
+
+`create` builds whatever Horus owns and is missing (today: the Kafka and Flink
+Data Hubs). Without --yes it only prints the plan. It is idempotent: re-running
+it skips anything that already exists.
 """
 from __future__ import annotations
 
@@ -14,6 +19,8 @@ import json
 import os
 import re
 import sys
+import tempfile
+import time
 from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -27,6 +34,11 @@ class Report:
     def __init__(self) -> None:
         self.rows: List[Dict[str, Any]] = []
         self.gateway_env: Dict[str, str] = {}
+        self.planned_hubs: List[Dict[str, str]] = []
+        self.hubs: Dict[str, Optional[dict]] = {}
+        self.nifi_api: Optional[str] = None
+        self.env_name = ""
+        self.owner = ""
 
     def add(self, component: str, state: str, detail: str) -> None:
         self.rows.append({"component": component, "state": state, "detail": detail})
@@ -72,6 +84,7 @@ def _dedicated_hub(rep: Report, label: str, name: str, override: Optional[str], 
         definition = override or (f"{runtime} - {template} for {cloud}" if runtime else None)
         if definition in definitions:
             rep.add(label, TODO, f"{name} does not exist; create will use '{definition}'")
+            rep.planned_hubs.append({"name": name, "definition": definition, "cloud": cloud})
         else:
             rep.add(label, FAIL, f"{name} does not exist and cluster definition '{definition}' "
                                  "is not available; set the matching HORUS_*_DEFINITION")
@@ -94,6 +107,7 @@ def status(cfg: cfgmod.Config) -> Report:
     except CdpError as e:
         rep.add("cdp identity", FAIL, f"CDP credentials rejected: {e}")
         return rep
+    rep.owner = user.get("workloadUsername") or ""
     if cfg.workload_user and cfg.workload_user != user.get("workloadUsername"):
         rep.add("workload user", WARN,
                 f"HORUS_WORKLOAD_USER={cfg.workload_user} differs from the CDP key owner "
@@ -109,6 +123,7 @@ def status(cfg: cfgmod.Config) -> Report:
         rep.add("environment", FAIL, f"{cfg.environment}: {e}")
         return rep
     env_crn = env["crn"]
+    rep.env_name = cfg.environment
     rep.add("environment", OK if env.get("status") == "AVAILABLE" else WARN,
             f"{cfg.environment} {env.get('status')} {env.get('cloudPlatform')} {env.get('region')}")
     runtime = None
@@ -127,6 +142,7 @@ def status(cfg: cfgmod.Config) -> Report:
                    cdp("datahub", "list-cluster-definitions").get("clusterDefinitions", [])}
     kafka = _dedicated_hub(rep, "kafka datahub", cfg.kafka_datahub, cfg.kafka_definition,
                            "Streams Messaging Light Duty", env, runtime, definitions)
+    rep.hubs["kafka"] = kafka
     if kafka:
         brokers = _hosts(kafka, ("core_broker", "broker"))
         rep.rows[-1]["detail"] += f" ({len(brokers)} brokers)"
@@ -134,6 +150,7 @@ def status(cfg: cfgmod.Config) -> Report:
             rep.gateway_env["KAFKA_BROKERS"] = ",".join(f"{h}:9093" for h in brokers)
     flink = _dedicated_hub(rep, "flink datahub", cfg.flink_datahub, cfg.flink_definition,
                            "Streaming Analytics Light Duty", env, runtime, definitions)
+    rep.hubs["flink"] = flink
     if flink:
         ssb = _endpoint(flink, "SSB_SSE_UI", api=False) or _endpoint(flink, "SSB_SSE_UI")
         rep.rows[-1]["detail"] += f"; SSB {ssb or 'endpoint not found'}"
@@ -142,8 +159,10 @@ def status(cfg: cfgmod.Config) -> Report:
     nifi = _datahub(rep, "nifi datahub", cfg.nifi_datahub, env_crn)
     if nifi is None:
         rep.add("nifi datahub", FAIL, f"{cfg.nifi_datahub} not found (set HORUS_NIFI_DATAHUB)")
-    elif nifi:
+    rep.hubs["nifi"] = nifi
+    if nifi:
         api = _endpoint(nifi, "NIFI_NODE")
+        rep.nifi_api = api
         rep.add("nifi datahub", OK if nifi.get("status") == "AVAILABLE" else WARN,
                 f"{cfg.nifi_datahub} {nifi.get('status')}; API {api or 'not exposed'}")
         if "NiFi 2" not in (nifi.get("workloadType") or ""):
@@ -175,7 +194,7 @@ def status(cfg: cfgmod.Config) -> Report:
                 rep.add("lake vw", OK if host else FAIL,
                         f"{cfg.lake_vw} (trino) {d.get('status')}, {when}, owner {owner}"
                         + ("" if host else " -- no Trino endpoint found"))
-                rep.gateway_env.update({"LAKE_ENGINE": "trino", "LAKE_CATALOG": "iceberg",
+                rep.gateway_env.update({"LAKE_ENGINE": "trino", "LAKE_CATALOG": cfg.lake_catalog,
                                         "HIVE_HOST": host, "HIVE_PORT": port, "HIVE_USE_SSL": "true"})
             else:
                 ldap = (d.get("supportedAuthMethods") or {}).get("ldap")
@@ -216,6 +235,127 @@ def status(cfg: cfgmod.Config) -> Report:
     return rep
 
 
+CREATE_CMD = {"AWS": "create-aws-cluster", "AZURE": "create-azure-cluster", "GCP": "create-gcp-cluster"}
+TERMINAL_BAD = ("CREATE_FAILED", "DELETE_COMPLETED", "DELETE_FAILED", "DELETED_ON_PROVIDER_SIDE")
+
+
+def create_hubs(cfg: cfgmod.Config, rep: Report, wait: bool, timeout_s: int = 5400) -> int:
+    for hub in rep.planned_hubs:
+        request = {
+            "clusterName": hub["name"],
+            "clusterDefinitionName": hub["definition"],
+            "environmentName": rep.env_name,
+            "tags": [{"key": "project", "value": "horus"},
+                     {"key": "horus-instance", "value": cfg.instance},
+                     {"key": "horus-owner", "value": rep.owner}],
+        }
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
+            json.dump(request, fh)
+        try:
+            cdp("datahub", CREATE_CMD[hub["cloud"]], "--cli-input-json", f"file://{fh.name}")
+            print(f"requested {hub['name']} ({hub['definition']})")
+        except CdpError as e:
+            print(f"FAILED to request {hub['name']}: {e}")
+            return 1
+        finally:
+            os.unlink(fh.name)
+    if not wait:
+        print("Not waiting; run `status` to follow progress.")
+        return 0
+
+    pending = {h["name"] for h in rep.planned_hubs}
+    deadline = time.time() + timeout_s
+    while pending and time.time() < deadline:
+        time.sleep(60)
+        for name in sorted(pending):
+            st = cdp("datahub", "describe-cluster", "--cluster-name", name)["cluster"].get("status")
+            print(f"{time.strftime('%H:%M:%S')} {name}: {st}", flush=True)
+            if st == "AVAILABLE":
+                pending.discard(name)
+            elif st in TERMINAL_BAD:
+                print(f"{name} ended in {st}; see the Management Console event history")
+                return 1
+    if pending:
+        print(f"timed out waiting for: {', '.join(sorted(pending))}")
+        return 1
+    print("All Horus Data Hubs are AVAILABLE.")
+    return 0
+
+
+def _ready(hub: Optional[dict]) -> bool:
+    return bool(hub) and hub.get("status") == "AVAILABLE"
+
+
+def _ca_bundle(env_name: str) -> str:
+    """Public CAs (Knox / CDW endpoints) + the environment's FreeIPA root (brokers)."""
+    import certifi
+
+    root = cdp("environments", "get-root-certificate", "--environment-name", env_name)["contents"]
+    fh = tempfile.NamedTemporaryFile("w", suffix=".pem", delete=False)
+    fh.write(open(certifi.where()).read() + "\n" + root.strip() + "\n")
+    fh.close()
+    return fh.name
+
+
+def deploy_data_plane(cfg: cfgmod.Config, rep: Report, start_flows: bool) -> int:
+    """Topic, lakehouse table and NiFi flows -- each only once its hub is ready."""
+    if not (cfg.workload_user and cfg.workload_password):
+        print("data plane: HORUS_WORKLOAD_USER / HORUS_WORKLOAD_PASSWORD not set; skipping")
+        return 1
+    user, pw = cfg.workload_user, cfg.workload_password
+    ca = _ca_bundle(rep.env_name)
+    failures = 0
+    kafka_ok = False
+    try:
+        brokers = [b for b in rep.gateway_env.get("KAFKA_BROKERS", "").split(",") if b]
+        if _ready(rep.hubs.get("kafka")) and brokers:
+            import kafka_admin
+            try:
+                kafka_admin.ensure_topic(brokers, user, pw, ca, cfg.topic)
+                kafka_ok = True
+            except Exception as e:  # noqa: BLE001
+                print(f"kafka: FAILED: {e}")
+                failures += 1
+        else:
+            print("kafka: hub not AVAILABLE yet; topic skipped")
+
+        if rep.gateway_env.get("LAKE_ENGINE") == "trino":
+            import lake
+            try:
+                lake.ensure_table(rep.gateway_env["HIVE_HOST"], int(rep.gateway_env["HIVE_PORT"]), user, pw,
+                                  cfg.lake_catalog, cfg.database, cfg.table)
+            except Exception as e:  # noqa: BLE001
+                print(f"lake: FAILED: {e}")
+                failures += 1
+        else:
+            print("lake: table creation is implemented for Trino warehouses only; skipped")
+
+        if _ready(rep.hubs.get("nifi")) and rep.nifi_api:
+            import nifi as nifimod
+            params = {
+                "kafka.bootstrap.servers": (",".join(brokers), False, "Comma-separated broker list, port 9093"),
+                "kafka.sasl.username": (user, False, "CDP workload user name"),
+                "kafka.sasl.password": (pw, True, "CDP workload password"),
+                "kafka.topic": (cfg.topic, False, "Topic all feeds publish to"),
+                "aisstream.api.key": (cfg.aisstream_api_key or "", False, "aisstream.io API key (vessels flow only)"),
+                "http.contact": (cfg.http_contact or "", False, "Contact sent in the User-Agent to adsb.lol and NWS"),
+            }
+            try:
+                n = nifimod.NiFi(rep.nifi_api, user, pw, verify=ca)
+                nifimod.deploy(n, cfg.instance, cfg.parameter_context, params,
+                               start=start_flows and kafka_ok)
+            except Exception as e:  # noqa: BLE001
+                print(f"nifi: FAILED: {e}")
+                failures += 1
+        else:
+            print("nifi: hub not AVAILABLE; flows skipped")
+
+        print("ssb: Flink job submission not implemented yet (needs the Flink hub up to read its API)")
+    finally:
+        os.unlink(ca)
+    return 1 if failures else 0
+
+
 def _print(rep: Report) -> None:
     marks = {OK: "OK  ", WARN: "WARN", FAIL: "FAIL", TODO: "TODO"}
     width = max(len(r["component"]) for r in rep.rows)
@@ -229,12 +369,37 @@ def _print(rep: Report) -> None:
 
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(prog="horus provision")
-    ap.add_argument("command", choices=["status"])
+    ap.add_argument("command", choices=["status", "create"])
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     ap.add_argument("--env-file", default=".env")
+    ap.add_argument("--yes", action="store_true", help="create: actually create (billable) resources")
+    ap.add_argument("--wait", action="store_true", help="create: wait until the Data Hubs are AVAILABLE")
+    ap.add_argument("--no-start", action="store_true", help="create: import NiFi flows but leave them stopped")
     args = ap.parse_args(argv)
 
-    rep = status(cfgmod.load(args.env_file))
+    cfg = cfgmod.load(args.env_file)
+    rep = status(cfg)
+    if args.command == "create":
+        _print(rep)
+        if rep.blocked:
+            print("\nNot creating anything: fix the FAIL rows first.")
+            return 1
+        print("\nPlan:")
+        for h in rep.planned_hubs:
+            print(f"  create Data Hub {h['name']}  <- '{h['definition']}'  (billable)")
+        print(f"  ensure topic {cfg.topic}, table {cfg.lake_catalog}.{cfg.database}.{cfg.table}, "
+              f"NiFi context {cfg.parameter_context} + 6 flows"
+              + ("" if args.no_start else " (started once Kafka is up)"))
+        if not args.yes:
+            print("\nDry run. Re-run with --yes to apply.")
+            return 0
+        print()
+        rc = create_hubs(cfg, rep, args.wait) if rep.planned_hubs else 0
+        if rc:
+            return rc
+        if rep.planned_hubs:
+            rep = status(cfg)          # refresh: hubs we just waited for are now AVAILABLE
+        return deploy_data_plane(cfg, rep, start_flows=not args.no_start)
     if args.json:
         print(json.dumps({"rows": rep.rows, "gateway_env": rep.gateway_env}, indent=2))
     else:
