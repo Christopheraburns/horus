@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from typing import Any, Dict, List, Optional
 
@@ -62,6 +63,23 @@ def _datahub(rep: Report, label: str, name: str, env_crn: str) -> Optional[dict]
     return c
 
 
+def _dedicated_hub(rep: Report, label: str, name: str, override: Optional[str], template: str,
+                   env: dict, runtime: Optional[str], definitions: set) -> Optional[dict]:
+    """A Data Hub Horus owns: report it, or report what `create` would build."""
+    hub = _datahub(rep, label, name, env["crn"])
+    if hub is None:
+        cloud = (env.get("cloudPlatform") or "AWS").upper()
+        definition = override or (f"{runtime} - {template} for {cloud}" if runtime else None)
+        if definition in definitions:
+            rep.add(label, TODO, f"{name} does not exist; create will use '{definition}'")
+        else:
+            rep.add(label, FAIL, f"{name} does not exist and cluster definition '{definition}' "
+                                 "is not available; set the matching HORUS_*_DEFINITION")
+    elif hub:
+        rep.add(label, OK if hub.get("status") == "AVAILABLE" else WARN, f"{name} {hub.get('status')}")
+    return hub
+
+
 def status(cfg: cfgmod.Config) -> Report:
     rep = Report()
     for p in cfg.problems:
@@ -82,7 +100,7 @@ def status(cfg: cfgmod.Config) -> Report:
                 f"{user.get('workloadUsername')}")
     if not (cfg.workload_user and cfg.workload_password):
         rep.add("workload creds", WARN,
-                "HORUS_WORKLOAD_USER / HORUS_WORKLOAD_PASSWORD not set -- needed for Kafka, NiFi and Impala")
+                "HORUS_WORKLOAD_USER / HORUS_WORKLOAD_PASSWORD not set -- needed for Kafka, NiFi, SSB and the lakehouse")
 
     # Environment + Data Lake runtime
     try:
@@ -104,26 +122,21 @@ def status(cfg: cfgmod.Config) -> Report:
     except (CdpError, IndexError, KeyError) as e:
         rep.add("data lake", FAIL, f"could not read the Data Lake: {e}")
 
-    # Kafka Data Hub (dedicated; created if missing)
-    kafka = _datahub(rep, "kafka datahub", cfg.kafka_datahub, env_crn)
-    if kafka is None:
-        cloud = (env.get("cloudPlatform") or "AWS").upper()
-        definition = cfg.kafka_definition or (
-            f"{runtime} - Streams Messaging Light Duty for {cloud}" if runtime else None)
-        names = {d["clusterDefinitionName"] for d in
-                 cdp("datahub", "list-cluster-definitions").get("clusterDefinitions", [])}
-        if definition in names:
-            rep.add("kafka datahub", TODO, f"{cfg.kafka_datahub} does not exist; create will use '{definition}'")
-        else:
-            rep.add("kafka datahub", FAIL,
-                    f"{cfg.kafka_datahub} does not exist and cluster definition '{definition}' is not "
-                    "available; set HORUS_KAFKA_DEFINITION")
-    elif kafka:
+    # Dedicated Data Hubs: Kafka and Flink (SQL Stream Builder); created if missing.
+    definitions = {d["clusterDefinitionName"] for d in
+                   cdp("datahub", "list-cluster-definitions").get("clusterDefinitions", [])}
+    kafka = _dedicated_hub(rep, "kafka datahub", cfg.kafka_datahub, cfg.kafka_definition,
+                           "Streams Messaging Light Duty", env, runtime, definitions)
+    if kafka:
         brokers = _hosts(kafka, ("core_broker", "broker"))
-        rep.add("kafka datahub", OK if kafka.get("status") == "AVAILABLE" else WARN,
-                f"{cfg.kafka_datahub} {kafka.get('status')} ({len(brokers)} brokers)")
+        rep.rows[-1]["detail"] += f" ({len(brokers)} brokers)"
         if brokers:
             rep.gateway_env["KAFKA_BROKERS"] = ",".join(f"{h}:9093" for h in brokers)
+    flink = _dedicated_hub(rep, "flink datahub", cfg.flink_datahub, cfg.flink_definition,
+                           "Streaming Analytics Light Duty", env, runtime, definitions)
+    if flink:
+        ssb = _endpoint(flink, "SSB_SSE_UI", api=False) or _endpoint(flink, "SSB_SSE_UI")
+        rep.rows[-1]["detail"] += f"; SSB {ssb or 'endpoint not found'}"
 
     # NiFi Data Hub (re-used)
     nifi = _datahub(rep, "nifi datahub", cfg.nifi_datahub, env_crn)
@@ -136,33 +149,42 @@ def status(cfg: cfgmod.Config) -> Report:
         if "NiFi 2" not in (nifi.get("workloadType") or ""):
             rep.add("nifi version", WARN, "the Horus flows target NiFi 2.x; this hub is not a NiFi 2 template")
 
-    # Impala virtual warehouse (re-used, CDW)
-    if not cfg.impala_vw:
-        rep.add("impala vw", FAIL, "HORUS_IMPALA_VW is not set")
+    # Lakehouse virtual warehouse (re-used, CDW): Impala or Trino
+    if not cfg.lake_vw:
+        rep.add("lake vw", FAIL, "HORUS_LAKE_VW is not set")
     else:
         dw = next((c for c in cdp("dw", "list-clusters").get("clusters", [])
                    if c.get("environmentCrn") == env_crn), None)
         vw = None
         if dw:
             vw = next((v for v in cdp("dw", "list-vws", "--cluster-id", dw["id"]).get("vws", [])
-                       if v.get("name") == cfg.impala_vw), None)
+                       if v.get("name") == cfg.lake_vw), None)
         if not vw:
-            rep.add("impala vw", FAIL, f"{cfg.impala_vw} not found in {cfg.environment}'s Data Warehouse")
-        elif vw.get("vwType") != "impala":
-            rep.add("impala vw", FAIL, f"{cfg.impala_vw} is a {vw.get('vwType')} warehouse, not Impala")
+            rep.add("lake vw", FAIL, f"{cfg.lake_vw} not found in {cfg.environment}'s Data Warehouse")
+        elif vw.get("vwType") not in ("impala", "trino"):
+            rep.add("lake vw", FAIL, f"{cfg.lake_vw} is a {vw.get('vwType')} warehouse; need Impala or Trino")
         else:
             d = cdp("dw", "describe-vw", "--cluster-id", dw["id"], "--vw-id", vw["id"])["vw"]
             ep = d.get("endpoints") or {}
-            ldap = (d.get("supportedAuthMethods") or {}).get("ldap")
-            rep.add("impala vw", OK if ldap else FAIL,
-                    f"{cfg.impala_vw} {d.get('status')} (auto-suspends; wakes on first query)"
-                    + ("" if ldap else " -- LDAP auth disabled, gateway cannot log in"))
-            rep.gateway_env.update({
-                "HIVE_HOST": ep.get("hostname", ""),
-                "HIVE_PORT": str(ep.get("port", 443)),
-                "HIVE_HTTP_PATH": "cliservice",
-                "HIVE_USE_SSL": "true",
-            })
+            suspend = (d.get("autoscalingOptions") or {}).get("autoSuspendTimeoutSeconds")
+            when = f"auto-suspends after {suspend}s" if suspend else "never auto-suspends"
+            owner = (d.get("creator") or {}).get("workloadUsername")
+            if vw["vwType"] == "trino":
+                m = re.search(r"https://([^:'/]+):(\d+)", ep.get("trinoCli", ""))
+                host, port = (m.group(1), m.group(2)) if m else ("", "443")
+                rep.add("lake vw", OK if host else FAIL,
+                        f"{cfg.lake_vw} (trino) {d.get('status')}, {when}, owner {owner}"
+                        + ("" if host else " -- no Trino endpoint found"))
+                rep.gateway_env.update({"LAKE_ENGINE": "trino", "LAKE_CATALOG": "iceberg",
+                                        "HIVE_HOST": host, "HIVE_PORT": port, "HIVE_USE_SSL": "true"})
+            else:
+                ldap = (d.get("supportedAuthMethods") or {}).get("ldap")
+                rep.add("lake vw", OK if ldap else FAIL,
+                        f"{cfg.lake_vw} (impala) {d.get('status')}, {when}, owner {owner}"
+                        + ("" if ldap else " -- LDAP auth disabled, gateway cannot log in"))
+                rep.gateway_env.update({"LAKE_ENGINE": "impala", "HIVE_HOST": ep.get("hostname", ""),
+                                        "HIVE_PORT": str(ep.get("port", 443)),
+                                        "HIVE_HTTP_PATH": "cliservice", "HIVE_USE_SSL": "true"})
 
     # Workbench (informational)
     try:
@@ -179,7 +201,6 @@ def status(cfg: cfgmod.Config) -> Report:
         rep.add("workbench", WARN, f"could not list workbenches: {e}")
 
     # Not yet implemented -- reported so nobody mistakes silence for success.
-    rep.add("lakehouse writer", TODO, "Kafka -> Iceberg path not chosen yet")
     rep.add("data plane", TODO,
             f"topic {cfg.topic}, database {cfg.database}, NiFi context {cfg.parameter_context}: "
             "checks not implemented yet (need the hubs running)")

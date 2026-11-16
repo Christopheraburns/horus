@@ -15,3 +15,5 @@ httpx==0.28.1
 # TimeTravel history reader — HiveServer2 (Knox/LDAP) over the Iceberg lake.
 impyla==0.19.0
 thrift-sasl==0.4.3
+# TimeTravel / lakehouse reader for a CDW Trino virtual warehouse (LAKE_ENGINE=trino).
+trino==0.340.0

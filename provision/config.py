@@ -36,8 +36,10 @@ class Config:
     environment: str
     kafka_datahub: str
     kafka_definition: Optional[str]      # None -> pick to match the Data Lake runtime
+    flink_datahub: str
+    flink_definition: Optional[str]
     nifi_datahub: str
-    impala_vw: Optional[str]
+    lake_vw: Optional[str]               # CDW virtual warehouse (Impala or Trino)
     workbench: Optional[str]
     workload_user: Optional[str]
     workload_password: Optional[str] = field(repr=False, default=None)
@@ -87,8 +89,10 @@ def load(dotenv_path: str = ".env") -> Config:
         environment=environment or "",
         kafka_datahub=_env("HORUS_KAFKA_DATAHUB", f"horus-{instance}-kafka"),
         kafka_definition=_env("HORUS_KAFKA_DEFINITION"),
+        flink_datahub=_env("HORUS_FLINK_DATAHUB", f"horus-{instance}-flink"),
+        flink_definition=_env("HORUS_FLINK_DEFINITION"),
         nifi_datahub=_env("HORUS_NIFI_DATAHUB", f"horus-{instance}-nifi"),
-        impala_vw=_env("HORUS_IMPALA_VW"),
+        lake_vw=_env("HORUS_LAKE_VW") or _env("HORUS_IMPALA_VW"),
         workbench=_env("HORUS_WORKBENCH"),
         workload_user=_env("HORUS_WORKLOAD_USER"),
         workload_password=_env("HORUS_WORKLOAD_PASSWORD"),

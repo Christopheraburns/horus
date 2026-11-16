@@ -1,9 +1,14 @@
 """Lakehouse history reader for the TimeTravel replay.
 
-Queries the Iceberg ``horus.events_iceberg`` table through **HiveServer2** on the
-Data Engineering Data Hub. Hive is RAZ-integrated, so S3 access "just works" with
-the workload user's Ranger grants (no S3 credentials handled here) — the same
-engine that answers your Hue queries. The Horus canvas calls the gateway
+Queries the Iceberg ``events_iceberg`` table through one of two engines, chosen
+by ``LAKE_ENGINE``:
+
+  * ``impala`` (default) -- HiveServer2 protocol: a CDW Impala virtual warehouse
+    (HIVE_HTTP_PATH=cliservice) or a Data Hub through Knox;
+  * ``trino`` -- a CDW Trino virtual warehouse (HTTPS + workload user/password).
+
+Both are RAZ/Ranger-integrated, so S3 access uses the workload user's grants (no
+S3 credentials handled here). The Horus canvas calls the gateway
 ``/history`` endpoints to pull time-windowed entity positions and replays them.
 
 Two things make interactive scrubbing usable over Hive/Tez:
@@ -13,10 +18,13 @@ Two things make interactive scrubbing usable over Hive/Tez:
   * ``bounds`` (the scrubber extent) is **cached** so we don't re-scan the whole
     table on every activate.
 
-Connection is env-driven (CDP Knox / LDAP):
+Connection is env-driven (LDAP / basic auth with the workload user):
+    LAKE_ENGINE      impala (default) | trino
+    LAKE_CATALOG     Trino catalog holding the table (default "iceberg"; trino only)
     HIVE_HOST        Knox gateway host (bare hostname; a pasted jdbc:hive2://… is
                      tolerated and stripped)                                 (required)
-    HIVE_HTTP_PATH   Knox httpPath, e.g. "<datahub-name>/cdp-proxy-api/hive" (required)
+    HIVE_HTTP_PATH   "cliservice" (CDW Impala) or Knox "<datahub>/cdp-proxy-api/impala"
+                     (required for impala; unused for trino)
     HIVE_USER        workload username
     HIVE_PASSWORD    workload password
     HIVE_PORT        default 443
@@ -62,10 +70,15 @@ HIVE_PASSWORD = os.environ.get("HIVE_PASSWORD")
 HIVE_DATABASE = os.environ.get("HIVE_DATABASE", "horus")
 HIVE_TABLE = os.environ.get("HIVE_TABLE", "events_iceberg")
 HIVE_USE_SSL = os.environ.get("HIVE_USE_SSL", "true").lower() == "true"
+LAKE_ENGINE = os.environ.get("LAKE_ENGINE", "impala").strip().lower()
+LAKE_CATALOG = os.environ.get("LAKE_CATALOG", "iceberg").strip()
+if LAKE_ENGINE not in ("impala", "trino"):
+    raise ValueError(f"LAKE_ENGINE must be 'impala' or 'trino', got {LAKE_ENGINE!r}")
 BOUNDS_TTL = float(os.environ.get("HISTORY_BOUNDS_TTL", "300"))
 PRELOAD_HOURS = float(os.environ.get("HISTORY_PRELOAD_HOURS", "3"))
 
-FQTN = f"{HIVE_DATABASE}.{HIVE_TABLE}"
+FQTN = (f"{LAKE_CATALOG}.{HIVE_DATABASE}.{HIVE_TABLE}" if LAKE_ENGINE == "trino"
+        else f"{HIVE_DATABASE}.{HIVE_TABLE}")
 
 # One reused connection (keeps the Tez session warm) guarded by a lock, since the
 # FastAPI threadpool can call in from multiple threads and a HS2 cursor is serial.
@@ -83,12 +96,26 @@ _win_end = 0
 
 
 def configured() -> bool:
+    if LAKE_ENGINE == "trino":
+        return bool(HIVE_HOST)
     return bool(HIVE_HOST and HIVE_HTTP_PATH)
 
 
 def _connect_new():
     if not configured():
         raise RuntimeError("HIVE_HOST / HIVE_HTTP_PATH not set — TimeTravel history is not configured")
+    if LAKE_ENGINE == "trino":
+        import trino  # lazy import
+
+        return trino.dbapi.connect(
+            host=HIVE_HOST,
+            port=HIVE_PORT,
+            user=HIVE_USER,
+            catalog=LAKE_CATALOG,
+            schema=HIVE_DATABASE,
+            http_scheme="https" if HIVE_USE_SSL else "http",
+            auth=trino.auth.BasicAuthentication(HIVE_USER, HIVE_PASSWORD) if HIVE_PASSWORD else None,
+        )
     from impala.dbapi import connect  # lazy import
 
     return connect(
@@ -154,6 +181,17 @@ def _fmt_ts(epoch_ms: int) -> str:
     return datetime.fromtimestamp(epoch_ms / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _ts_lit(epoch_ms: int, millis: bool = False) -> str:
+    """A timestamp literal both Impala and Trino accept."""
+    s = _fmt_ts_ms(epoch_ms) if millis else _fmt_ts(epoch_ms)
+    return f"CAST('{s}' AS TIMESTAMP)"
+
+
+def _json_str(col: str, path: str) -> str:
+    fn = "json_extract_scalar" if LAKE_ENGINE == "trino" else "get_json_object"
+    return f"{fn}({col}, '{path}')"
+
+
 def bounds(force: bool = False) -> dict:
     """Overall time extent + row count — cached (BOUNDS_TTL) so we don't re-scan."""
     global _bounds_cache, _bounds_ts
@@ -189,7 +227,7 @@ def _query_window(
     only asked for aviation. ``types`` (asset_type) is an optional finer filter.
     """
     where = [
-        f"event_time BETWEEN '{_fmt_ts(int(start_ms))}' AND '{_fmt_ts(int(end_ms))}'",
+        f"event_time BETWEEN {_ts_lit(int(start_ms))} AND {_ts_lit(int(end_ms))}",
         "lat IS NOT NULL",
         "lon IS NOT NULL",
     ]
@@ -205,7 +243,7 @@ def _query_window(
         f"SELECT asset_id, asset_type, lat, lon, event_time, source_feed, "
         # payload is the full canonical message (entity.name); older rows packed a
         # flat {"name": ...} object, so fall back to that.
-        f"COALESCE(get_json_object(payload, '$.entity.name'), get_json_object(payload, '$.name')) "
+        f"COALESCE({_json_str('payload', '$.entity.name')}, {_json_str('payload', '$.name')}) "
         f"FROM {FQTN} WHERE {' AND '.join(where)} "
         f"ORDER BY event_time LIMIT {int(limit)}"
     )
@@ -285,7 +323,7 @@ def asset_track(asset_id: str, start_ms: int, end_ms: int, limit: int = 20000) -
         f"SELECT lat, lon, event_time, source_feed, asset_type "
         f"FROM {FQTN} "
         f"WHERE asset_id = '{aid}' "
-        f"AND event_time BETWEEN '{_fmt_ts(int(start_ms))}' AND '{_fmt_ts(int(end_ms))}' "
+        f"AND event_time BETWEEN {_ts_lit(int(start_ms))} AND {_ts_lit(int(end_ms))} "
         f"AND lat IS NOT NULL AND lon IS NOT NULL "
         f"ORDER BY event_time LIMIT {int(limit)}"
     )
@@ -306,7 +344,8 @@ def payload_window(start_ms: int, end_ms: int, limit: int = 50000) -> list[dict]
     sql = (
         f"SELECT event_time, payload, asset_id, asset_type, lat, lon, source_feed "
         f"FROM {FQTN} "
-        f"WHERE event_time >= '{_fmt_ts_ms(int(start_ms))}' AND event_time < '{_fmt_ts_ms(int(end_ms))}' "
+        f"WHERE event_time >= {_ts_lit(int(start_ms), millis=True)} "
+        f"AND event_time < {_ts_lit(int(end_ms), millis=True)} "
         f"ORDER BY event_time LIMIT {int(limit)}"
     )
     rows = _run(sql)
