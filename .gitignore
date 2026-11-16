@@ -1,0 +1,20 @@
+# Large data -- keep out of git (graph dump, Memgraph snapshots, tiles)
+*.gz
+*.ndjson
+*.tgz
+*.mbtiles
+snapshots/
+
+# Secrets / filled-in config
+.env
+*.env
+!horus.env.example
+client.properties
+*.jks
+*.pem
+
+# Local cruft
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
