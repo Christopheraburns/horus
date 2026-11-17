@@ -66,6 +66,18 @@ class Config:
         return f"Horus-{self.instance}"
 
     @property
+    def ssb_project(self) -> str:
+        return f"horus_{self.instance}"
+
+    @property
+    def ssb_catalog(self) -> str:
+        return "horus_hive"
+
+    @property
+    def flink_job(self) -> str:
+        return f"horus_{self.instance}_kafka_to_iceberg"
+
+    @property
     def gateway_group(self) -> str:
         return f"horus-{self.instance}-feeds-gateway"
 

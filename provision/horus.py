@@ -12,9 +12,10 @@ the Feeds-Gateway needs.
 the workload credentials are set; run it from a Workbench session, since the
 brokers and NiFi gateway are only reachable inside the CDP network.
 
-`create` builds whatever Horus owns and is missing (today: the Kafka and Flink
-Data Hubs). Without --yes it only prints the plan. It is idempotent: re-running
-it skips anything that already exists.
+`create` builds whatever Horus owns and is missing: the Kafka and Flink Data
+Hubs, then the topic, lakehouse table, NiFi flows and the SSB Flink job.
+Without --yes it only prints the plan. It is idempotent: re-running it skips
+anything that already exists.
 """
 from __future__ import annotations
 
@@ -43,6 +44,7 @@ class Report:
         self.nifi_api: Optional[str] = None
         self.ssb_api: Optional[str] = None
         self.env_name = ""
+        self.realm = ""
         self.owner = ""
 
     def add(self, component: str, state: str, detail: str) -> None:
@@ -129,6 +131,7 @@ def status(cfg: cfgmod.Config) -> Report:
         return rep
     env_crn = env["crn"]
     rep.env_name = cfg.environment
+    rep.realm = ((env.get("freeipa") or {}).get("domain") or "").upper()
     rep.add("environment", OK if env.get("status") == "AVAILABLE" else WARN,
             f"{cfg.environment} {env.get('status')} {env.get('cloudPlatform')} {env.get('region')}")
     runtime = None
@@ -351,7 +354,19 @@ def deploy_data_plane(cfg: cfgmod.Config, rep: Report, start_flows: bool) -> int
         else:
             print("nifi: hub not AVAILABLE; flows skipped")
 
-        print("ssb: Flink job submission not implemented yet (needs the Flink hub up to read its API)")
+        if _ready(rep.hubs.get("flink")) and rep.ssb_api and kafka_ok:
+            import ssb as ssbmod
+            try:
+                s = ssbmod.SSB(rep.ssb_api, user, pw, verify=ca)
+                s.unlock_keytab(f"{user}@{rep.realm}", pw)   # SSB runs the job as this user
+                ssbmod.deploy(s, cfg.ssb_project, cfg.ssb_catalog, cfg.database, cfg.table, cfg.flink_job,
+                              {"TOPIC": cfg.topic, "GROUP_ID": cfg.lakehouse_group,
+                               "BROKERS": ",".join(brokers), "KAFKA_USER": user, "KAFKA_PASSWORD": pw})
+            except Exception as e:  # noqa: BLE001
+                print(f"ssb: FAILED: {e}")
+                failures += 1
+        else:
+            print("ssb: Flink hub not AVAILABLE or Kafka topic not ready; job skipped")
     finally:
         os.unlink(ca)
     return 1 if failures else 0
@@ -419,7 +434,22 @@ def check_data_plane(cfg: cfgmod.Config, rep: Report) -> None:
         else:
             rep.add("nifi flows", TODO, "NiFi hub not AVAILABLE")
 
-        rep.add("flink job", TODO, "SSB job submission not automated yet; see ssb/02_kafka_to_iceberg.sql")
+        if _ready(rep.hubs.get("flink")) and rep.ssb_api:
+            import ssb as ssbmod
+            try:
+                s = ssbmod.SSB(rep.ssb_api, user, pw, verify=ca)
+                pid = next((p["id"] for p in s._req("GET", "/projects") if p["name"] == cfg.ssb_project), None)
+                job = s.job(pid, cfg.flink_job) if pid else None
+                if job is None:
+                    rep.add("flink job", TODO, f"{cfg.flink_job} not submitted; run create --yes")
+                else:
+                    st = s.state(pid, job["job_id"])
+                    rep.add("flink job", OK if st == "RUNNING" else FAIL,
+                            f"{cfg.flink_job} {st} (SSB project {cfg.ssb_project})")
+            except Exception as e:  # noqa: BLE001
+                rep.add("flink job", FAIL, str(e)[:300])
+        else:
+            rep.add("flink job", TODO, "Flink hub not AVAILABLE")
     finally:
         os.unlink(ca)
 
@@ -458,6 +488,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"  ensure topic {cfg.topic}, table {cfg.lake_catalog}.{cfg.database}.{cfg.table}, "
               f"NiFi context {cfg.parameter_context} + 6 flows"
               + ("" if args.no_start else " (started once Kafka is up)"))
+        print(f"  ensure SSB project {cfg.ssb_project}, catalog {cfg.ssb_catalog}, Flink job {cfg.flink_job}")
         if not args.yes:
             print("\nDry run. Re-run with --yes to apply.")
             return 0

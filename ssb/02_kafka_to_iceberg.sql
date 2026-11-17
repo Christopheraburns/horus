@@ -1,33 +1,47 @@
--- Horus -- continuous Kafka -> Iceberg job. Run in SQL Stream Builder.
+-- Horus -- continuous Kafka -> Iceberg job for SQL Stream Builder.
 --
--- BEFORE YOU RUN
---   1. Job settings: ENABLE CHECKPOINTING (Iceberg commits only on checkpoint;
---      without it the job runs and the table stays empty).
---   2. Replace the <...> placeholders below. Paste the workload password in the
---      SSB editor only -- never commit a filled-in copy of this file.
---   3. The jaas class must be the NON-shaded
---      org.apache.kafka.common.security.plain.PlainLoginModule.
---   4. Ranger: `ssb` user can consume topic horus-events and publish ATLAS_HOOK.
+-- `python provision/horus.py create --yes` fills the {{...}} tokens and submits
+-- this as the job {{JOB_NAME}} in SSB project {{PROJECT}}, with checkpointing on
+-- (Iceberg only commits data files on a checkpoint). To run it by hand instead,
+-- replace the tokens in the SSB editor -- never commit a filled-in copy, it holds
+-- the workload password.
+--
+-- Prerequisites (the provisioner checks or creates the first three):
+--   * the Iceberg table {{DATABASE}}.events_iceberg (created through Trino)
+--   * the SSB Hive catalog {{HIVE_CATALOG}} (used to check the table is visible)
+--   * Ranger, Hadoop SQL: user `ssb` -- all on database {{DATABASE}}, table *
+--   * Ranger, S3 (RAZ): users `ssb` and the workload user -- read/write on
+--     path /data/warehouse/tablespace/external/hive/{{DATABASE}}.db (recursive)
+--   * the jaas class must be the NON-shaded PlainLoginModule below
 
 SET 'table.local-time-zone' = 'UTC';
 
 -- The whole Kafka value as one JSON string: one source definition serves every
 -- feed and the lake keeps the exact message NiFi produced.
-CREATE TEMPORARY TABLE IF NOT EXISTS horus_events_raw (
+CREATE TEMPORARY TABLE horus_events_raw (
     payload STRING
 ) WITH (
     'connector' = 'kafka',
-    'topic' = 'horus-events',
-    'scan.startup.mode' = 'earliest-offset',
+    'topic' = '{{TOPIC}}',
+    'scan.startup.mode' = 'group-offsets',
+    'properties.auto.offset.reset' = 'earliest',
     'format' = 'raw',
-    'properties.group.id' = 'horus-flink-lakehouse',
-    'properties.bootstrap.servers' = '<broker0>:9093,<broker1>:9093,<broker2>:9093',
+    'properties.group.id' = '{{GROUP_ID}}',
+    'properties.bootstrap.servers' = '{{BROKERS}}',
     'properties.security.protocol' = 'SASL_SSL',
     'properties.sasl.mechanism' = 'PLAIN',
-    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.plain.PlainLoginModule required username="<workload-user>" password="<workload-password>";'
+    'properties.sasl.jaas.config' = 'org.apache.kafka.common.security.plain.PlainLoginModule required username="{{KAFKA_USER}}" password="{{KAFKA_PASSWORD}}";'
 );
 
-INSERT INTO events_iceberg
+-- The Data Lake metastore as an Iceberg catalog, from the hub's Hive client
+-- config. The table already exists (created through Trino); Flink only appends.
+CREATE CATALOG horus_ice WITH (
+    'type' = 'iceberg',
+    'catalog-type' = 'hive',
+    'hive-conf-dir' = '/etc/hive/conf'
+);
+
+INSERT INTO horus_ice.{{DATABASE}}.events_iceberg
 SELECT
     COALESCE(JSON_VALUE(payload, '$.entity.source.originalId'),
              JSON_VALUE(payload, '$.entity.id'))                        AS event_id,
