@@ -1,7 +1,7 @@
 """Create the Horus lakehouse schema and Iceberg table through a CDW Trino VW.
 
 The table lands in the environment's shared metastore, so the Flink job in SQL
-Stream Builder writes to it through its Hive catalog and Trino/Impala read it.
+Stream Builder writes to it through a Flink Iceberg catalog and Trino/Impala read it.
 Column types mirror ssb/01_events_iceberg_ddl.sql exactly.
 """
 from __future__ import annotations

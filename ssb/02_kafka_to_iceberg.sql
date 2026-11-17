@@ -6,20 +6,26 @@
 -- replace the tokens in the SSB editor -- never commit a filled-in copy, it holds
 -- the workload password.
 --
--- Prerequisites (the provisioner checks or creates the first three):
+-- Prerequisites (the provisioner creates the first; it reports the Ranger ones):
 --   * the Iceberg table {{DATABASE}}.events_iceberg (created through Trino)
---   * the SSB Hive catalog {{HIVE_CATALOG}} (used to check the table is visible)
 --   * Ranger, Hadoop SQL: user `ssb` -- all on database {{DATABASE}}, table *
 --   * Ranger, S3 (RAZ): users `ssb` and the workload user -- read/write on
 --     path /data/warehouse/tablespace/external/hive/{{DATABASE}}.db (recursive)
 --   * the jaas class must be the NON-shaded PlainLoginModule below
 
 SET 'table.local-time-zone' = 'UTC';
+-- Dedupe memory: a key seen within the last 36 h is dropped. Covers the 24 h
+-- windows the USGS and FIRMS feeds re-send on every poll. RocksDB keeps that
+-- state on disk rather than in the TaskManager heap.
+SET 'table.exec.state.ttl' = '36 h';
+SET 'state.backend.type' = 'rocksdb';
+SET 'state.backend.incremental' = 'true';
 
 -- The whole Kafka value as one JSON string: one source definition serves every
 -- feed and the lake keeps the exact message NiFi produced.
 CREATE TEMPORARY TABLE horus_events_raw (
-    payload STRING
+    payload   STRING,
+    proc_time AS PROCTIME()
 ) WITH (
     'connector' = 'kafka',
     'topic' = '{{TOPIC}}',
@@ -41,7 +47,8 @@ CREATE CATALOG horus_ice WITH (
     'hive-conf-dir' = '/etc/hive/conf'
 );
 
-INSERT INTO horus_ice.{{DATABASE}}.events_iceberg
+-- Every feed normalised to the lake schema.
+CREATE TEMPORARY VIEW horus_events AS
 SELECT
     COALESCE(JSON_VALUE(payload, '$.entity.source.originalId'),
              JSON_VALUE(payload, '$.entity.id'))                        AS event_id,
@@ -60,6 +67,22 @@ SELECT
     JSON_VALUE(payload, '$.captured_at')                                AS captured_at,
     CAST(JSON_VALUE(payload, '$.schema_version') AS BIGINT)             AS schema_version,
     CAST(JSON_VALUE(payload, '$.entity.source.confidence') AS DOUBLE)   AS source_confidence,
-    payload                                                             AS payload
+    payload                                                             AS payload,
+    proc_time
 FROM horus_events_raw
 WHERE JSON_VALUE(payload, '$.entity.id') IS NOT NULL;
+
+-- One row per (event_id, event_time): re-polled earthquakes, fires and weather
+-- alerts, and repeated AIS reports, are dropped; a moving asset's new positions
+-- are new keys and are kept. Keeping the FIRST row on processing time makes the
+-- output append-only, so Iceberg needs no upserts.
+INSERT INTO horus_ice.{{DATABASE}}.events_iceberg
+SELECT event_id, asset_id, asset_type, lat, lon, event_time, ingest_time, trace_id,
+       ingest_run_id, source_provider, source_feed, captured_at, schema_version,
+       source_confidence, payload
+FROM (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY event_id, event_time
+                                 ORDER BY proc_time ASC) AS rn
+    FROM horus_events
+)
+WHERE rn = 1;

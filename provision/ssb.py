@@ -1,8 +1,8 @@
 """Deploy the Horus Kafka -> Iceberg Flink job through SQL Stream Builder (REST v2).
 
 Talks to the Streaming Analytics Data Hub's Knox ``cdp-proxy-api`` SSB endpoint
-with the workload user's basic-auth credentials. Idempotent: the project, the
-Hive catalog and the job are each created only if missing, and a running job is
+with the workload user's basic-auth credentials. Idempotent: the project and
+the job are each created only if missing, and a running job is
 left alone.
 """
 from __future__ import annotations
@@ -47,25 +47,6 @@ class SSB:
                 return p["id"]
         return self._req("POST", "/projects", json={"name": name, "description": description})["id"]
 
-    # -- Hive catalog on the Data Lake metastore --------------------------------
-    def ensure_hive_catalog(self, pid: str, name: str, database: str) -> bool:
-        """True if created. Same shape the Streaming SQL Console stores."""
-        if any(d["name"] == name for d in self._req("GET", f"/projects/{pid}/data-sources")):
-            return False
-        self._req("POST", f"/projects/{pid}/data-sources",
-                  json={"name": name, "type": "catalog",
-                        "properties": {"catalog_type": "hive", "default-database": database,
-                                       "table_filters": []}})
-        return True
-
-    def table_visible(self, pid: str, catalog: str, database: str, table: str) -> bool:
-        """Can SSB read the table's metadata? (False usually means the Ranger policy is missing.)"""
-        try:
-            self.execute_sql(pid, f"DESCRIBE {catalog}.{database}.{table}")
-            return True
-        except SsbError:
-            return False
-
     def execute_sql(self, pid: str, sql: str) -> dict:
         return self._req("POST", f"/projects/{pid}/sql/execute",
                          json={"sql": sql, "add_to_history": False,
@@ -104,6 +85,15 @@ class SSB:
         self._req("POST", f"/projects/{pid}/jobs/{jid}/execute", json=body)
         return self.job(pid, name) or {"job_id": jid}
 
+    def stop(self, pid: str, job_id: int, savepoint: bool = False, timeout_s: int = 180) -> str:
+        self._req("POST", f"/projects/{pid}/jobs/{job_id}/stop", json={"savepoint": savepoint})
+        deadline = time.time() + timeout_s
+        st = self.state(pid, job_id)
+        while st in HEALTHY + ("CANCELLING", "FAILING") and time.time() < deadline:
+            time.sleep(5)
+            st = self.state(pid, job_id)
+        return st
+
     def unlock_keytab(self, principal: str, password: str) -> None:
         """SSB runs jobs as the user, from a keytab it derives from the workload password."""
         self._req("POST", "/user/keytab/generate", json={"principal": principal, "password": password})
@@ -121,17 +111,11 @@ def render(values: Dict[str, str]) -> str:
     return sql
 
 
-def deploy(ssb: SSB, project: str, catalog: str, database: str, table: str, job_name: str,
+def deploy(ssb: SSB, project: str, database: str, table: str, job_name: str,
            values: Dict[str, str], checkpoint_ms: int = 60000, log=print) -> Optional[str]:
-    """Project, catalog, then the job. Returns the job state, or None if not submitted."""
+    """Project, then the job. Returns the job state, or None if not submitted."""
     pid = ssb.ensure_project(project, f"Horus {database}: Kafka -> Iceberg lakehouse job")
     log(f"ssb: project {project} ready ({pid})")
-    if ssb.ensure_hive_catalog(pid, catalog, database):
-        log(f"ssb: registered Hive catalog {catalog}")
-    if not ssb.table_visible(pid, catalog, database, table):
-        raise SsbError(
-            f"SSB cannot read {database}.{table} through {catalog} -- add a Ranger Hadoop SQL policy "
-            f"(Data Lake Ranger, service cm_hive): user ssb, all on database {database}, table *, column *")
 
     existing = ssb.job(pid, job_name)
     if existing and ssb.state(pid, existing["job_id"]) in HEALTHY:
@@ -139,11 +123,15 @@ def deploy(ssb: SSB, project: str, catalog: str, database: str, table: str, job_
         log(f"ssb: job {job_name} already {st}")
         return st
 
-    sql = render(dict(values, JOB_NAME=job_name, PROJECT=project, HIVE_CATALOG=catalog, DATABASE=database))
+    sql = render(dict(values, JOB_NAME=job_name, PROJECT=project, DATABASE=database))
     try:
         job = ssb.submit(pid, job_name, sql, checkpoint_ms)
     except SsbError as e:
         m = re.search(r"s3a://([^/]+)/(\S+?/" + re.escape(database) + r"\.db)/", str(e))
+        if "Cannot find table" in str(e) or "AccessControl" in str(e) or "Permission denied" in str(e):
+            raise SsbError(
+                f"SSB cannot read {database}.{table} from the metastore -- add a Ranger Hadoop SQL policy "
+                f"(Data Lake Ranger, service cm_hive): user ssb, all on database {database}, table *, column *") from e
         if m and "Failed to open input stream" in str(e):
             raise SsbError(
                 f"Flink cannot read the table files in S3 -- add a Ranger S3 (RAZ) policy: bucket {m.group(1)}, "

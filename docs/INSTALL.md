@@ -119,16 +119,34 @@ error but never matches, so access is still denied.
 
 ## 8. Flink job
 
-`create --yes` does four things here:
+`create --yes` does three things here:
 
 1. Unlocks your SSB keytab. SSB runs jobs as you, from a keytab derived from
    your workload password.
 2. Creates the SSB project `horus_<instance>`.
-3. Registers the Hive catalog `horus_hive`.
-4. Submits [ssb/02_kafka_to_iceberg.sql](../ssb/02_kafka_to_iceberg.sql) as a
+3. Submits [ssb/02_kafka_to_iceberg.sql](../ssb/02_kafka_to_iceberg.sql) as a
    streaming job with exactly-once checkpointing every 60 seconds. Iceberg
    commits data only on a checkpoint, so expect rows about a minute after the
    job starts.
+
+The job removes duplicates as it writes. It keeps the first row for each
+(`event_id`, `event_time`) pair it sees in a 36-hour window and drops the
+rest. This removes the repeats that polled feeds produce: earthquakes, fires
+and weather alerts are re-sent on every poll. A moving asset's new positions
+have new keys and are kept.
+
+### Rebuilding the lake
+
+The lake can be rebuilt from Kafka for as long as the topic still holds the
+data. Topic retention is 7 days by default. To rebuild:
+
+1. Stop the job in SSB.
+2. Run `DELETE FROM iceberg.horus_<instance>.events_iceberg` in Trino.
+3. Bump the consumer-group suffix in `lakehouse_group` in
+   [provision/config.py](../provision/config.py).
+4. Re-run `create --yes`.
+
+The new consumer group starts from the oldest message in the topic.
 
 Check the result:
 

@@ -70,10 +70,6 @@ class Config:
         return f"horus_{self.instance}"
 
     @property
-    def ssb_catalog(self) -> str:
-        return "horus_hive"
-
-    @property
     def flink_job(self) -> str:
         return f"horus_{self.instance}_kafka_to_iceberg"
 
@@ -83,7 +79,9 @@ class Config:
 
     @property
     def lakehouse_group(self) -> str:
-        return f"horus-{self.instance}-lakehouse"
+        # "-2": the lake was rebuilt (2026-11-17) by replaying the topic through the
+        # deduplicating job under a fresh consumer group. Bump again to re-replay.
+        return f"horus-{self.instance}-lakehouse-2"
 
 
 def load(dotenv_path: str = ".env") -> Config:

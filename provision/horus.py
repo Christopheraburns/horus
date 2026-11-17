@@ -359,7 +359,7 @@ def deploy_data_plane(cfg: cfgmod.Config, rep: Report, start_flows: bool) -> int
             try:
                 s = ssbmod.SSB(rep.ssb_api, user, pw, verify=ca)
                 s.unlock_keytab(f"{user}@{rep.realm}", pw)   # SSB runs the job as this user
-                ssbmod.deploy(s, cfg.ssb_project, cfg.ssb_catalog, cfg.database, cfg.table, cfg.flink_job,
+                ssbmod.deploy(s, cfg.ssb_project, cfg.database, cfg.table, cfg.flink_job,
                               {"TOPIC": cfg.topic, "GROUP_ID": cfg.lakehouse_group,
                                "BROKERS": ",".join(brokers), "KAFKA_USER": user, "KAFKA_PASSWORD": pw})
             except Exception as e:  # noqa: BLE001
@@ -488,7 +488,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"  ensure topic {cfg.topic}, table {cfg.lake_catalog}.{cfg.database}.{cfg.table}, "
               f"NiFi context {cfg.parameter_context} + 6 flows"
               + ("" if args.no_start else " (started once Kafka is up)"))
-        print(f"  ensure SSB project {cfg.ssb_project}, catalog {cfg.ssb_catalog}, Flink job {cfg.flink_job}")
+        print(f"  ensure SSB project {cfg.ssb_project}, Flink job {cfg.flink_job}")
         if not args.yes:
             print("\nDry run. Re-run with --yes to apply.")
             return 0
