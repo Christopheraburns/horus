@@ -149,6 +149,19 @@ def load_flows(instance: str, ctx_name: str) -> List[tuple]:
     return out
 
 
+def inspect(nifi: NiFi, instance: str, ctx_name: str) -> dict:
+    """Read-only: does our context exist, and the run state of each Horus group."""
+    ctx = any(c["component"]["name"] == ctx_name for c in nifi.parameter_contexts())
+    prefix = f"HORUS-{instance} - "
+    groups = {}
+    for g in nifi.child_groups(nifi.root_id()):
+        name = g["component"]["name"]
+        if name.startswith(prefix):
+            groups[name[len(prefix):]] = {k: g.get(k, 0) for k in
+                                          ("runningCount", "stoppedCount", "invalidCount", "disabledCount")}
+    return {"context": ctx, "groups": groups, "expected": len(load_flows(instance, ctx_name))}
+
+
 def deploy(nifi: NiFi, instance: str, ctx_name: str, params: Dict[str, tuple],
            start: bool, log=print) -> Dict[str, str]:
     """Create/refresh the context, import missing flows, enable services, optionally start."""

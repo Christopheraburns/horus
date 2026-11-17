@@ -1,14 +1,17 @@
-"""Create the Horus topic on the Streams Messaging Data Hub (idempotent)."""
+"""Create and inspect the Horus topic on the Streams Messaging Data Hub."""
 from __future__ import annotations
 
-from typing import List
+import time
+from typing import List, Optional
 
 
-def ensure_topic(brokers: List[str], user: str, password: str, ca_file: str, topic: str,
-                 partitions: int = 3, replication: int = 3, log=print) -> bool:
-    """Returns True if the topic was created, False if it already existed."""
-    from confluent_kafka.admin import AdminClient, NewTopic  # lazy: only needed here
+def _admin(brokers: List[str], user: str, password: str, ca_file: str, timeout_s: int = 30):
+    """Connected AdminClient plus cluster metadata. Fails fast on bad credentials
+    (librdkafka otherwise retries an auth failure until the timeout)."""
+    from confluent_kafka import KafkaException
+    from confluent_kafka.admin import AdminClient  # lazy: only needed here
 
+    errors: List[str] = []
     admin = AdminClient({
         "bootstrap.servers": ",".join(brokers),
         "security.protocol": "SASL_SSL",
@@ -17,8 +20,37 @@ def ensure_topic(brokers: List[str], user: str, password: str, ca_file: str, top
         "sasl.password": password,
         "ssl.ca.location": ca_file,
         "socket.timeout.ms": 30000,
+        "error_cb": lambda err: errors.append(str(err)),
     })
-    md = admin.list_topics(timeout=30)
+    deadline = time.time() + timeout_s
+    while True:
+        try:
+            return admin, admin.list_topics(timeout=5)
+        except KafkaException as e:
+            auth = next((m for m in errors if "Authentication" in m or "SASL" in m), None)
+            if auth:
+                raise RuntimeError(
+                    f"kafka: login rejected for {user} ({auth.split(':')[-1].strip()}) -- "
+                    "check HORUS_WORKLOAD_USER/PASSWORD, then sync users to the environment") from None
+            if time.time() > deadline:
+                raise RuntimeError(f"kafka: brokers unreachable after {timeout_s}s "
+                                   f"({errors[-1] if errors else e})") from None
+
+
+def topic_partitions(brokers: List[str], user: str, password: str, ca_file: str,
+                     topic: str) -> Optional[int]:
+    """Partition count, or None if the topic does not exist. Read-only."""
+    _, md = _admin(brokers, user, password, ca_file)
+    t = md.topics.get(topic)
+    return len(t.partitions) if t is not None else None
+
+
+def ensure_topic(brokers: List[str], user: str, password: str, ca_file: str, topic: str,
+                 partitions: int = 3, replication: int = 3, log=print) -> bool:
+    """Returns True if the topic was created, False if it already existed."""
+    from confluent_kafka.admin import NewTopic
+
+    admin, md = _admin(brokers, user, password, ca_file)
     if topic in md.topics:
         log(f"kafka: topic {topic} already exists")
         return False

@@ -8,6 +8,10 @@
 stopped Data Hub or wakes a suspended virtual warehouse, and prints the values
 the Feeds-Gateway needs.
 
+`status` also checks the data plane (topic, lakehouse table, NiFi flows) when
+the workload credentials are set; run it from a Workbench session, since the
+brokers and NiFi gateway are only reachable inside the CDP network.
+
 `create` builds whatever Horus owns and is missing (today: the Kafka and Flink
 Data Hubs). Without --yes it only prints the plan. It is idempotent: re-running
 it skips anything that already exists.
@@ -221,11 +225,6 @@ def status(cfg: cfgmod.Config) -> Report:
     except CdpError as e:
         rep.add("workbench", WARN, f"could not list workbenches: {e}")
 
-    # Not yet implemented -- reported so nobody mistakes silence for success.
-    rep.add("data plane", TODO,
-            f"topic {cfg.topic}, database {cfg.database}, NiFi context {cfg.parameter_context}: "
-            "checks not implemented yet (need the hubs running)")
-
     rep.gateway_env.update({
         "KAFKA_TOPIC": cfg.topic,
         "KAFKA_GROUP_ID": cfg.gateway_group,
@@ -358,6 +357,73 @@ def deploy_data_plane(cfg: cfgmod.Config, rep: Report, start_flows: bool) -> int
     return 1 if failures else 0
 
 
+def check_data_plane(cfg: cfgmod.Config, rep: Report) -> None:
+    """Read-only checks of what `create --yes` builds. Brokers and the NiFi gateway
+    are private: run this from a Workbench session, not a laptop."""
+    if not (cfg.workload_user and cfg.workload_password):
+        rep.add("data plane", WARN, "workload credentials not set; topic/table/flow checks skipped")
+        return
+    user, pw = cfg.workload_user, cfg.workload_password
+    ca = _ca_bundle(rep.env_name)
+    try:
+        brokers = [b for b in rep.gateway_env.get("KAFKA_BROKERS", "").split(",") if b]
+        if _ready(rep.hubs.get("kafka")) and brokers:
+            import kafka_admin
+            try:
+                n = kafka_admin.topic_partitions(brokers, user, pw, ca, cfg.topic)
+                rep.add("kafka topic", OK if n else TODO,
+                        f"{cfg.topic} ({n} partitions)" if n else f"{cfg.topic} missing; run create --yes")
+            except Exception as e:  # noqa: BLE001
+                rep.add("kafka topic", FAIL, str(e))
+        else:
+            rep.add("kafka topic", TODO, "Kafka hub not AVAILABLE")
+
+        if rep.gateway_env.get("LAKE_ENGINE") == "trino":
+            import lake
+            fq = f"{cfg.lake_catalog}.{cfg.database}.{cfg.table}"
+            try:
+                n = lake.table_rows(rep.gateway_env["HIVE_HOST"], int(rep.gateway_env["HIVE_PORT"]),
+                                    user, pw, cfg.lake_catalog, cfg.database, cfg.table)
+                if n is None:
+                    rep.add("lake table", TODO, f"{fq} missing; run create --yes")
+                else:
+                    rep.add("lake table", OK if n else WARN,
+                            f"{fq} {n} rows" + ("" if n else " -- empty until the Flink job runs"))
+            except Exception as e:  # noqa: BLE001
+                msg = str(e)
+                if "401" in msg or "Invalid credentials" in msg:
+                    msg = "Trino rejected the workload login (401) -- reset/sync the workload password"
+                rep.add("lake table", FAIL, msg[:300])
+        else:
+            rep.add("lake table", TODO, "checks implemented for Trino warehouses only")
+
+        if _ready(rep.hubs.get("nifi")) and rep.nifi_api:
+            import nifi as nifimod
+            try:
+                info = nifimod.inspect(nifimod.NiFi(rep.nifi_api, user, pw, verify=ca),
+                                       cfg.instance, cfg.parameter_context)
+                rep.add("nifi context", OK if info["context"] else TODO,
+                        cfg.parameter_context + ("" if info["context"] else " missing; run create --yes"))
+                g = info["groups"]
+                running = [k for k, v in g.items() if v["runningCount"] and not v["stoppedCount"]
+                           and not v["invalidCount"]]
+                state = OK if len(running) == info["expected"] else (WARN if g else TODO)
+                detail = f"{len(g)}/{info['expected']} imported, {len(running)} fully running"
+                for k, v in sorted(g.items()):
+                    if k not in running:
+                        detail += (f"\n{'':19}{k}: {v['runningCount']} running, {v['stoppedCount']} stopped, "
+                                   f"{v['invalidCount']} invalid")
+                rep.add("nifi flows", state, detail)
+            except Exception as e:  # noqa: BLE001
+                rep.add("nifi flows", FAIL, str(e)[:300])
+        else:
+            rep.add("nifi flows", TODO, "NiFi hub not AVAILABLE")
+
+        rep.add("flink job", TODO, "SSB job submission not automated yet; see ssb/02_kafka_to_iceberg.sql")
+    finally:
+        os.unlink(ca)
+
+
 def _print(rep: Report) -> None:
     marks = {OK: "OK  ", WARN: "WARN", FAIL: "FAIL", TODO: "TODO"}
     width = max(len(r["component"]) for r in rep.rows)
@@ -402,6 +468,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         if rep.planned_hubs:
             rep = status(cfg)          # refresh: hubs we just waited for are now AVAILABLE
         return deploy_data_plane(cfg, rep, start_flows=not args.no_start)
+    if not rep.blocked:
+        check_data_plane(cfg, rep)
     if args.json:
         print(json.dumps({"rows": rep.rows, "gateway_env": rep.gateway_env}, indent=2))
     else:

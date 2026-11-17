@@ -6,6 +6,8 @@ Column types mirror ssb/01_events_iceberg_ddl.sql exactly.
 """
 from __future__ import annotations
 
+from typing import Optional
+
 COLUMNS = """
     event_id          VARCHAR,
     asset_id          VARCHAR,
@@ -25,14 +27,30 @@ COLUMNS = """
 """
 
 
-def ensure_table(host: str, port: int, user: str, password: str, catalog: str,
-                 database: str, table: str, log=print) -> None:
+def _cursor(host: str, port: int, user: str, password: str, catalog: str):
     import trino  # lazy
 
     conn = trino.dbapi.connect(host=host, port=port, user=user, catalog=catalog,
                                http_scheme="https",
                                auth=trino.auth.BasicAuthentication(user, password))
-    cur = conn.cursor()
+    return conn.cursor()
+
+
+def table_rows(host: str, port: int, user: str, password: str, catalog: str,
+               database: str, table: str) -> Optional[int]:
+    """Row count, or None if the schema or table does not exist. Read-only."""
+    cur = _cursor(host, port, user, password, catalog)
+    cur.execute(f"SELECT count(*) FROM {catalog}.information_schema.tables "
+                f"WHERE table_schema = '{database}' AND table_name = '{table}'")
+    if not cur.fetchall()[0][0]:
+        return None
+    cur.execute(f"SELECT COUNT(*) FROM {catalog}.{database}.{table}")
+    return cur.fetchall()[0][0]
+
+
+def ensure_table(host: str, port: int, user: str, password: str, catalog: str,
+                 database: str, table: str, log=print) -> None:
+    cur = _cursor(host, port, user, password, catalog)
 
     def run(sql: str) -> list:
         cur.execute(sql)
