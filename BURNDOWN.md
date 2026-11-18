@@ -80,6 +80,21 @@ Inventory and details: [docs/AIRGAP.md](docs/AIRGAP.md). Image and install-time 
 | 7.9 | Sync the browser's SOURCE flag with the server (intel `secure=1`) | Toggle changes intel source | 1 | Todo |
 | 7.10 | Splash screen removed; fly-to-city disabled (code kept) | Done 2026-11-18 | 0.5 | Done |
 
+## 8. Offline satellite imagery (Horus side)
+
+The imagery tiles are built separately, on another machine:
+[imagery/BURNDOWN-IMAGERY.md](imagery/BURNDOWN-IMAGERY.md) (ESA WorldCover 2021,
+10 m; global base plus regions of interest to zoom 14, delivered as raster
+MBTiles). These items connect them to Horus.
+
+| ID | Item | Done when | Est | Status |
+|---|---|---|---|---|
+| 8.1 | Tile server `config.json`: add each imagery MBTiles as a data source; check the served TileJSON | `/data/horus-imagery-*.json` served | 1 | Todo |
+| 8.2 | UI: imagery as a MapLibre raster layer from the Horus tile server; the satellite button returns in PIPELINE mode and uses it (PUBLIC mode can still use Esri) | Satellite view works with egress blocked | 3 | Todo |
+| 8.3 | Map attribution for ESA WorldCover / Copernicus (CC BY 4.0) shown whenever the imagery is visible | Attribution visible | 0.5 | Todo |
+| 8.4 | Setting for a customer's own imagery server (`IMAGERY_TILE_URL`), read at run time | One setting switches the source | 1 | Todo |
+| 8.5 | Where the imagery files live in Workbench (project storage, a volume, or object storage) and how they get there | Decided and documented in INSTALL.md | 1 | Todo |
+
 ## Carried over
 
 | ID | Item | Status |
