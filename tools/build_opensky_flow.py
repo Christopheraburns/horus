@@ -23,7 +23,8 @@ DST = os.path.join(NIFI, "HORUS_Flights_OpenSky.json")
 GROOVY = os.path.join(NIFI, "scripts", "flights-opensky.groovy")
 
 NS = uuid.UUID("5f0c8a52-3c1e-4a8e-9a57-0f6a1c2b9d11")   # stable ids across rebuilds
-NIFI_VERSION = "2.6.0.4.12.0.0-914"
+NIFI_VERSION = "2.6.0.4.12.0.0-914"          # version in the adsb.lol export
+OAUTH_NAR_VERSION = "2.6.0.4.12.0.100-95"    # installed on the Horus NiFi (tools/nifi_props.py)
 OPENSKY_URL = "https://opensky-network.org/api/states/all?extended=1"
 TOKEN_URL = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
 POLL = "90 sec"   # 4 credits per global call: 960 calls/day = 3,840 of a standard account's 4,000
@@ -90,23 +91,28 @@ def build() -> dict:
         "name": "OpenSky OAuth2 Token",
         "comments": "Client credentials from the OpenSky account page (API client).",
         "type": "org.apache.nifi.oauth2.StandardOauth2AccessTokenProvider",
-        "bundle": {"group": "org.apache.nifi", "artifact": "nifi-oauth2-provider-nar", "version": NIFI_VERSION},
+        "bundle": {"group": "org.apache.nifi", "artifact": "nifi-oauth2-provider-nar", "version": OAUTH_NAR_VERSION},
+        # Property keys as NiFi 2.6 defines them (verified with tools/nifi_props.py).
         "properties": {
-            "authorization-server-url": TOKEN_URL,
-            "grant-type": "client_credentials",
-            "client-id": "#{opensky.client.id}",
-            "client-secret": "#{opensky.client.secret}",
+            "Authorization Server URL": TOKEN_URL,
+            "Client Authentication Strategy": "REQUEST_BODY",
+            "Grant Type": "client_credentials",
+            "Client ID": "#{opensky.client.id}",
+            "Client secret": "#{opensky.client.secret}",
+            "Refresh Window": "60 s",   # renew a minute before the 30-minute token expires
         },
         "propertyDescriptors": {
-            "authorization-server-url": descriptor("authorization-server-url", "Authorization Server URL"),
-            "grant-type": descriptor("grant-type", "Grant Type"),
-            "client-id": descriptor("client-id", "Client ID"),
-            "client-secret": descriptor("client-secret", "Client secret", sensitive=True),
+            "Authorization Server URL": descriptor("Authorization Server URL", "Authorization Server URL"),
+            "Client Authentication Strategy": descriptor("Client Authentication Strategy", "Client Authentication Strategy"),
+            "Grant Type": descriptor("Grant Type", "Grant Type"),
+            "Client ID": descriptor("Client ID", "Client ID"),
+            "Client secret": descriptor("Client secret", "Client secret", sensitive=True),
+            "Refresh Window": descriptor("Refresh Window", "Refresh Window"),
         },
         "controllerServiceApis": [{
             "type": "org.apache.nifi.oauth2.OAuth2AccessTokenProvider",
             "bundle": {"group": "org.apache.nifi", "artifact": "nifi-standard-services-api-nar",
-                       "version": NIFI_VERSION},
+                       "version": OAUTH_NAR_VERSION},
         }],
         "scheduledState": "DISABLED",
         "bulletinLevel": "WARN",

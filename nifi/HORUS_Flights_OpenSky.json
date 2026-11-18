@@ -12,8 +12,8 @@
     "remoteProcessGroups": [],
     "processors": [
       {
-        "identifier": "58ee2f35-1f19-53eb-8a5b-effddb016d5c",
-        "instanceIdentifier": "bcd3a32e-7efa-59c4-9e99-1b279703abc3",
+        "identifier": "43f51f02-9850-577d-8017-c8c779fc710a",
+        "instanceIdentifier": "1e396ac7-ad2b-56bc-b2ec-072dfde469a4",
         "name": "Trigger OpenSky (90 sec)",
         "comments": "",
         "position": {
@@ -906,16 +906,16 @@
         "groupIdentifier": "96c40c82-b631-5e4c-b856-a0807425acbc"
       },
       {
-        "identifier": "a68c50c0-41e9-5c38-97bc-0b6a0ff80aac",
-        "instanceIdentifier": "a67f94ed-cdbe-5117-982b-071188663b64",
+        "identifier": "992aec91-874b-5f08-9bd4-16f1da043b32",
+        "instanceIdentifier": "28738f3f-3e6e-5a5e-9867-228543eece92",
         "name": "",
         "source": {
-          "id": "58ee2f35-1f19-53eb-8a5b-effddb016d5c",
+          "id": "43f51f02-9850-577d-8017-c8c779fc710a",
           "type": "PROCESSOR",
           "groupId": "96c40c82-b631-5e4c-b856-a0807425acbc",
           "name": "Trigger OpenSky (90 sec)",
           "comments": "",
-          "instanceIdentifier": "bcd3a32e-7efa-59c4-9e99-1b279703abc3"
+          "instanceIdentifier": "1e396ac7-ad2b-56bc-b2ec-072dfde469a4"
         },
         "destination": {
           "id": "0d6ed04e-ee2f-5667-b88f-2eb904e71287",
@@ -1107,41 +1107,57 @@
         "bundle": {
           "group": "org.apache.nifi",
           "artifact": "nifi-oauth2-provider-nar",
-          "version": "2.6.0.4.12.0.0-914"
+          "version": "2.6.0.4.12.0.100-95"
         },
         "properties": {
-          "authorization-server-url": "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token",
-          "grant-type": "client_credentials",
-          "client-id": "#{opensky.client.id}",
-          "client-secret": "#{opensky.client.secret}"
+          "Authorization Server URL": "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token",
+          "Client Authentication Strategy": "REQUEST_BODY",
+          "Grant Type": "client_credentials",
+          "Client ID": "#{opensky.client.id}",
+          "Client secret": "#{opensky.client.secret}",
+          "Refresh Window": "60 s"
         },
         "propertyDescriptors": {
-          "authorization-server-url": {
-            "name": "authorization-server-url",
+          "Authorization Server URL": {
+            "name": "Authorization Server URL",
             "displayName": "Authorization Server URL",
             "identifiesControllerService": false,
             "sensitive": false,
             "dynamic": false
           },
-          "grant-type": {
-            "name": "grant-type",
+          "Client Authentication Strategy": {
+            "name": "Client Authentication Strategy",
+            "displayName": "Client Authentication Strategy",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Grant Type": {
+            "name": "Grant Type",
             "displayName": "Grant Type",
             "identifiesControllerService": false,
             "sensitive": false,
             "dynamic": false
           },
-          "client-id": {
-            "name": "client-id",
+          "Client ID": {
+            "name": "Client ID",
             "displayName": "Client ID",
             "identifiesControllerService": false,
             "sensitive": false,
             "dynamic": false
           },
-          "client-secret": {
-            "name": "client-secret",
+          "Client secret": {
+            "name": "Client secret",
             "displayName": "Client secret",
             "identifiesControllerService": false,
             "sensitive": true,
+            "dynamic": false
+          },
+          "Refresh Window": {
+            "name": "Refresh Window",
+            "displayName": "Refresh Window",
+            "identifiesControllerService": false,
+            "sensitive": false,
             "dynamic": false
           }
         },
@@ -1151,7 +1167,7 @@
             "bundle": {
               "group": "org.apache.nifi",
               "artifact": "nifi-standard-services-api-nar",
-              "version": "2.6.0.4.12.0.0-914"
+              "version": "2.6.0.4.12.0.100-95"
             }
           }
         ],
