@@ -173,9 +173,12 @@ async def llm_health() -> JSONResponse:
     return JSONResponse(
         {
             "status": "ok",
+            # "ollama"/"ollama_url" are kept for the UI's /llm page; they report the
+            # active provider, which is normally Mistral (provider "openai").
             "ollama": await llm.available(),
             "model": llm.OLLAMA_MODEL,
             "ollama_url": llm.OLLAMA_URL,
+            "provider": llm.PROVIDER,
             "timestamp": _now_iso(),
         }
     )

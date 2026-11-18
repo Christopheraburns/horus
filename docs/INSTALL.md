@@ -190,7 +190,7 @@ Create them in this order. The UI needs the URLs of the others.
 | Application | Script | Runtime | Env vars | Check |
 |---|---|---|---|---|
 | Tile server | `horus/services/tileserver/serve-tiles.py` | Horus Node 22 | `TILESERVER_PUBLIC_URL=https://<tiles>.<domain>/` (trailing slash) | `/styles/dark/style.json` loads |
-| Feeds-gateway | `horus/services/feeds-gateway/gateway_startup.py` | PBJ Workbench Python 3.12 | the "Feeds-Gateway variables" that `status` prints, copied exactly; `INTEL_URL=https://<intel>.<domain>` (no slash) | `/health` lists all five feeds and `kafka.messages` climbs |
+| Feeds-gateway | `horus/services/feeds-gateway/gateway_startup.py` | PBJ Workbench Python 3.12 | the "Feeds-Gateway variables" that `status` prints, copied exactly; `INTEL_URL=https://<intel>.<domain>` (no slash); the LLM variables below | `/health` lists all five feeds and `kafka.messages` climbs |
 | Intel resolver | `horus/services/intel/launch_intel_resolver.py` | Horus Node 22 | `MEMGRAPH_URL=https://<graph>.<domain>/cypher` (optional) | `/health` shows about 20,000 `sanctions_entries` |
 | Memgraph | `horus/services/memgraph/app.py` | Horus Memgraph | none | `MATCH (n) RETURN count(n)` returns 949256 |
 | UI | `horus/ui/launch_ui.py` | Horus Node 22 | `FEEDS_GATEWAY_URL=https://<gateway>.<domain>` (no slash), `INTEL_URL=https://<intel>.<domain>` (no slash), `TILESERVER_PUBLIC_URL=https://<tiles>.<domain>/` (trailing slash) | the map loads with the dark basemap |
@@ -201,6 +201,28 @@ basemap URL is compiled into the build. The next start rebuilds the UI if
 `TILESERVER_PUBLIC_URL` has changed, or if a `git pull` has brought in changes
 to `ui/`. Set `HORUS_UI_REBUILD=1` to force a rebuild. Give the UI a profile
 with at least 4 GiB, because `next build` uses a lot of memory.
+
+### LLM (Mistral)
+
+The feeds-gateway serves every AI feature in Horus: the `/llm` page, Ask Horus
+(GraphRAG) and pattern-of-life. Set these on the feeds-gateway Application:
+
+| Variable | Value |
+|---|---|
+| `LLM_BASE_URL` | `https://api.mistral.ai/v1` (Mistral Studio) |
+| `LLM_API_KEY` | a Mistral API key from Mistral Studio |
+| `LLM_MODEL` | `mistral-large-4` (the default) |
+| `LLM_REASONING_EFFORT` | optional: `none` for faster answers, `high` to force reasoning |
+
+For an air-gapped environment, keep the same variables and point them at the
+on-prem endpoint: Mistral deployed on-prem, or a Mistral model served by
+Cloudera AI Inference. Mistral's API is OpenAI-compatible, so nothing else
+changes. Check `GET <LLM_BASE_URL>/models` for the exact model ID the endpoint
+expects. The UI holds no LLM keys.
+
+Check: the gateway's `/llm/health` shows `"provider": "openai"`, the model, and
+`"ollama": true`. That field name is historical; it means the LLM endpoint is
+reachable.
 
 Some Applications need files that are too large for git. Upload these to the
 project before starting them:
