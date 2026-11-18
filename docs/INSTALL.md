@@ -33,6 +33,21 @@ You need:
 
 You also need permission to create Data Hubs in the environment.
 
+### Workbench runtimes (admin, once per Workbench)
+
+The Horus Applications run on two custom runtimes, published as public images
+on Docker Hub. A Workbench administrator registers them once, in **Site
+Administration → Runtime Catalog → Add Runtime**, using the full tags:
+
+| Image | Edition | Used by |
+|---|---|---|
+| `docker.io/christopheraburns/horus-node-runtime:1.0.0` | Horus Node 22 | UI, intel resolver, tile server |
+| `docker.io/christopheraburns/horus-memgraph-runtime:1.0.0` | Horus Memgraph | graph database |
+
+The Dockerfiles are in [runtimes/](../runtimes). To rebuild the images or push
+them to another registry, for example one a Workbench without internet access
+can reach, run `HORUS_REGISTRY=<registry> runtimes/build.sh --push`.
+
 ## 1. Credentials
 
 You need two kinds of credentials.
