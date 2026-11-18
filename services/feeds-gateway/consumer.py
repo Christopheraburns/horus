@@ -39,7 +39,17 @@ ENTITIES_TOPIC = (
     os.environ.get("KAFKA_TOPIC")
     or "horus-events"
 )
-FEED_TTL_SECONDS = float(os.environ.get("FEED_TTL_SECONDS", "3600"))
+# How long an entity stays on the live map after Horus last heard from it.
+# Measured from when the gateway received the update (not the report's own
+# time), so lakehouse replay ages the same way as live data.
+FEED_TTL_SECONDS = float(os.environ.get("FEED_TTL_SECONDS", "3600"))          # default, every feed
+# Aircraft move fast: about two adsb.lol cycles (12 min) before one is dropped.
+FLIGHT_TTL_SECONDS = float(os.environ.get("FLIGHT_TTL_SECONDS", "1500"))
+# Vessels: a moving ship that has gone quiet (usually out of shore-based AIS
+# range) is dropped sooner than one at anchor or moored, which barely moves.
+VESSEL_TTL_MOVING_SECONDS = float(os.environ.get("VESSEL_TTL_MOVING_SECONDS", "1200"))
+VESSEL_TTL_STATIONARY_SECONDS = float(os.environ.get("VESSEL_TTL_STATIONARY_SECONDS", "3600"))
+VESSEL_MOVING_KNOTS = float(os.environ.get("VESSEL_MOVING_KNOTS", "1.0"))
 GROUP_ID = os.environ.get("KAFKA_GROUP_ID", "horus-feeds-gateway")
 
 
@@ -137,13 +147,24 @@ class FeedStore:
                 return True, count
             return False, self._batch_count[feed]
 
+    def _ttl_for(self, feed: str, item: dict) -> float:
+        """Seconds an entity stays live after its last update (see the *_TTL_* settings)."""
+        if feed == "flights":
+            return FLIGHT_TTL_SECONDS
+        if feed == "vessels":
+            speed = item.get("speed")
+            moving = isinstance(speed, (int, float)) and speed >= VESSEL_MOVING_KNOTS
+            return VESSEL_TTL_MOVING_SECONDS if moving else VESSEL_TTL_STATIONARY_SECONDS
+        return self._ttl
+
     async def items(self, feed: str) -> list[dict]:
-        cutoff = time.monotonic() - self._ttl
+        """Live items for a feed, each with ``age_s``: seconds since its last update."""
+        now = time.monotonic()
         async with self._lock:
             bucket = self._store.get(feed, {})
-            fresh = {k: v for k, v in bucket.items() if v[1] >= cutoff}
+            fresh = {k: v for k, v in bucket.items() if now - v[1] <= self._ttl_for(feed, v[0])}
             self._store[feed] = fresh  # opportunistic eviction
-            return [item for item, _ in fresh.values()]
+            return [{**item, "age_s": int(now - ts)} for item, ts in fresh.values()]
 
     async def mark_message(self) -> None:
         async with self._lock:

@@ -110,6 +110,15 @@ so flights also come from OpenSky. Both flows publish to the same topic.
 | 9.6 | Coverage grid for adsb.lol (40–60 points) | – | – | Cut (500 requests a day makes it impractical) |
 | 9.7 | Licensing options to revisit: OpenSky licensed tier (live and Trino, quote only); adsb.lol feeder (receiver about $150; feeder key allows a whole-world snapshot twice a minute; ask whether usable from AWS; ODbL) | Option chosen | – | Todo |
 
+## 10. Freshness of live positions
+
+| ID | Item | Done when | Est | Status |
+|---|---|---|---|---|
+| 10.1 | Popups show LAST UPDATE for aircraft and vessels; positions older than 15 min are drawn faded and marked STALE | Visible in both SOURCE modes | 2 | Done |
+| 10.2 | Gateway cutoffs per feed: aircraft 25 min, moving ships 20 min, ships at anchor 60 min, others 60 min (settings in INSTALL.md); every item carries `age_s` | Tested with a fake clock | 2 | Done |
+| 10.3 | Dead reckoning: estimate a moving ship's (or aircraft's) current position from its last speed and heading, drawn as an estimate (for example a dashed line from the last fix) | Estimated positions shown and labelled | 4 | Todo |
+| 10.4 | Commercial aircraft are thinned 10x before drawing (upstream OSIRIS performance shortcut in `HorusMap` `toFeatures(..., 10)`); review now that counts are lower | Decision made; thinning removed or zoom-dependent | 1 | Todo |
+
 ## Carried over
 
 | ID | Item | Status |

@@ -216,6 +216,24 @@ basemap URL is compiled into the build. The next start rebuilds the UI if
 to `ui/`. Set `HORUS_UI_REBUILD=1` to force a rebuild. Give the UI a profile
 with at least 4 GiB, because `next build` uses a lot of memory.
 
+### How long entities stay on the live map
+
+The feeds-gateway keeps the latest update for each entity and drops it once
+nothing new has arrived for a while. Ages are measured from when the gateway
+received the update, so lakehouse replay behaves the same as live data.
+Optional variables on the feeds-gateway Application:
+
+| Variable | Default | Applies to |
+|---|---|---|
+| `FLIGHT_TTL_SECONDS` | `1500` (25 min) | aircraft |
+| `VESSEL_TTL_MOVING_SECONDS` | `1200` (20 min) | ships at or above `VESSEL_MOVING_KNOTS` |
+| `VESSEL_TTL_STATIONARY_SECONDS` | `3600` (60 min) | ships at anchor or moored, or with no speed |
+| `VESSEL_MOVING_KNOTS` | `1.0` | the threshold between the two |
+| `FEED_TTL_SECONDS` | `3600` (60 min) | every other feed |
+
+The UI draws positions older than 15 minutes faded and marks them STALE, and
+every aircraft and vessel popup shows **LAST UPDATE**.
+
 ### LLM (Mistral)
 
 The feeds-gateway serves every AI feature in Horus: the `/llm` page, Ask Horus

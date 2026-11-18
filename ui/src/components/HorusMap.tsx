@@ -9,6 +9,31 @@ import {
   transformBasemapRequest,
 } from '@/lib/tileProxy';
 
+// Positions older than this are drawn faded and marked STALE in popups. The
+// gateway removes them entirely later (aircraft 25 min, moving ships 20 min,
+// ships at anchor 60 min).
+const STALE_AFTER_S = 900;
+
+/** Seconds since Horus last heard from an entity, or null when unknown. */
+function ageSeconds(item: any): number | null {
+  if (typeof item?.age_s === 'number') return item.age_s;           // from the gateway (PIPELINE)
+  const ts = item?.timestamp;                                          // PUBLIC: when the UI received it
+  return typeof ts === 'number' && ts > 0 ? Math.max(0, Math.round((Date.now() - ts) / 1000)) : null;
+}
+
+/** "42 s ago", "7 min ago", "1 h 5 min ago", with a STALE tag past STALE_AFTER_S. */
+function ageLabel(age: unknown): string {
+  const s = typeof age === 'number' ? age : Number(age);
+  if (age === null || age === undefined || age === '' || !Number.isFinite(s)) return '—';
+  const text = s < 60 ? `${Math.round(s)} s ago`
+    : s < 3600 ? `${Math.round(s / 60)} min ago`
+    : `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min ago`;
+  return s > STALE_AFTER_S ? `${text} · STALE` : text;
+}
+
+/** MapLibre expression: true when a feature's age_s is past STALE_AFTER_S. */
+const IS_STALE: any = ['>', ['coalesce', ['get', 'age_s'], 0], STALE_AFTER_S];
+
 interface HorusMapProps {
   /** False in PIPELINE mode: never fall back to a public basemap. */
   allowPublicTiles?: boolean;
@@ -458,7 +483,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         map.addLayer({ id: l.id, type: 'symbol', source: l.src, layout: {
           'icon-image': iconImage, 'icon-size': ['interpolate',['linear'],['zoom'], 1,0.4, 5,0.7, 10,1],
           'icon-rotate': ['get','heading'], 'icon-rotation-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true,
-        }, paint: { 'icon-opacity': 0.85 }});
+        }, paint: { 'icon-opacity': ['case', IS_STALE, 0.3, 0.85] }});
       });
 
       // Balloons (moving entities)
@@ -575,7 +600,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
           ['==', ['get','has_imo'], true], '#448AFF',
           ['==', ['get','type'], 'cargo'], '#26C6DA',
           '#B0BEC5'],
-        'circle-opacity': 0.75,
+        'circle-opacity': ['case', IS_STALE, 0.25, 0.75],
       }});
       map.addLayer({ id: 'ship-label', type: 'symbol', source: 'maritime-ships', minzoom: 5, layout: {
         'text-field': ['get','name'], 'text-size': 9, 'text-font': ['Noto Sans Regular'],
@@ -585,7 +610,8 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
           ['==', ['get','type'], 'tanker'], '#E65100',
           ['==', ['get','has_imo'], true], '#448AFF',
           ['==', ['get','type'], 'cargo'], '#26C6DA',
-          '#B0BEC5'], 'text-halo-color': '#000', 'text-halo-width': 1 }});
+          '#B0BEC5'], 'text-halo-color': '#000', 'text-halo-width': 1,
+        'text-opacity': ['case', IS_STALE, 0.35, 1] }});
 
       setMapReady(true);
     });
@@ -636,6 +662,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
             <div><span style="color:#5C5A54;font-size:9px;">REG</span><br/><span style="color:#E8E6E0;">${htmlEsc(p.registration||'—')}</span></div>
             <div><span style="color:#5C5A54;font-size:9px;">POS</span><br/><span style="color:#E8E6E0;">${coords[1].toFixed(2)},${coords[0].toFixed(2)}</span></div>
           </div>
+          <div style="margin-top:8px;font-size:10px;"><span style="color:#5C5A54;font-size:9px;">LAST UPDATE </span><span style="color:${Number(p.age_s) > STALE_AFTER_S ? '#FF9500' : '#E8E6E0'};">${ageLabel(p.age_s)}</span></div>
           <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap;">
             <a href="https://www.flightaware.com/live/flight/${encodeURIComponent(cs)}" target="_blank" style="${linkStyle}color:#D4AF37;border:1px solid rgba(212,175,55,0.4);background:rgba(212,175,55,0.1);">⚡ FLIGHTAWARE</a>
             <a href="https://globe.adsbexchange.com/?icao=${encodeURIComponent(p.icao24||'')}" target="_blank" style="${linkStyle}color:#00E5FF;border:1px solid rgba(0,229,255,0.4);background:rgba(0,229,255,0.1);">📡 ADS-B</a>
@@ -935,6 +962,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
           <div><span style="color:#5C5A54;">LATITUDE</span><br/><span style="color:#E8E6E0;font-family:monospace;">${coords[1].toFixed(4)}°</span></div>
           <div><span style="color:#5C5A54;">LONGITUDE</span><br/><span style="color:#E8E6E0;font-family:monospace;">${coords[0].toFixed(4)}°</span></div>
         </div>
+        <div style="margin-bottom:4px;"><span style="color:#5C5A54;font-size:9px;">LAST UPDATE: </span><span style="color:${Number(p.age_s) > STALE_AFTER_S ? '#FF9500' : '#E8E6E0'};font-size:9px;">${ageLabel(p.age_s)}</span></div>
         <div><span style="color:#5C5A54;font-size:9px;">DESTINATION: </span><span style="color:#E8E6E0;font-size:9px;">${p.destination || 'UNKNOWN'}</span></div>
         <button onclick="window.openHorusIntel({ type: 'vessel', mmsi: '${idSafe(String(p.mmsi||''))}', imo: '${idSafe(String(p.imo||''))}', name: '${idSafe(p.name||'')}', flag: '${idSafe(p.flag||'')}', speed: '${idSafe(String(p.speed??''))}', destination: '${idSafe(p.destination||'')}' })" style="width:100%;margin-top:10px;padding:6px 12px;background:${color}26;border:1px solid ${color}80;color:${color};font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:bold;letter-spacing:0.1em;border-radius:4px;cursor:pointer;">[ DEEP DIVE INTEL ]</button>
         <a href="https://www.marinetraffic.com/en/ais/details/ships/mmsi:${p.mmsi}" target="_blank" style="${linkStyle}flex:1;text-align:center;color:${color};border:1px solid ${color}40;background:${color}15;display:inline-block;width:100%;box-sizing:border-box;margin-top:6px;">[ MARINETRAFFIC ↗ ]</a>
@@ -1075,7 +1103,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
       }
       return filtered.map((f: any) => ({
         type: 'Feature' as const, geometry: { type: 'Point' as const, coordinates: [f.lng, f.lat] },
-        properties: { callsign: f.callsign, heading: f.heading || 0, alt: f.alt, model: f.model, speed_knots: f.speed_knots, registration: f.registration, icao24: f.icao24, airline_code: f.airline_code || '', has_airline: !!(f.airline_code && String(f.airline_code).trim().length >= 2) },
+        properties: { callsign: f.callsign, heading: f.heading || 0, alt: f.alt, model: f.model, speed_knots: f.speed_knots, registration: f.registration, icao24: f.icao24, airline_code: f.airline_code || '', has_airline: !!(f.airline_code && String(f.airline_code).trim().length >= 2), age_s: ageSeconds(f) },
       }));
     };
     setGeo('flights', activeLayers.flights ? toFeatures(data.commercial_flights, 10) : []);
@@ -1228,7 +1256,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
     if (!mapReady) return;
     setGeo('maritime', activeLayers.maritime && data.maritime_ports ? data.maritime_ports.map((p: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [p.lng, p.lat] }, properties: { name: p.name, country: p.country, type: p.type, volume: p.volume, fleet: p.fleet, rank: p.rank } })) : []);
     setGeo('maritime-choke', activeLayers.maritime && data.maritime_chokepoints ? data.maritime_chokepoints.map((c: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [c.lng, c.lat] }, properties: { name: c.name, traffic: c.traffic, risk: c.risk } })) : []);
-    setGeo('maritime-ships', activeLayers.vessels && data.maritime_ships ? data.maritime_ships.map((s: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [s.lng, s.lat] }, properties: { id: s.id ?? s.mmsi, mmsi: s.mmsi, imo: s.imo, has_imo: !!s.imo, name: s.name || s.mmsi?.toString(), type: s.type || 'cargo', speed: s.speed, heading: s.heading, destination: s.destination, flag: s.flag } })) : []);
+    setGeo('maritime-ships', activeLayers.vessels && data.maritime_ships ? data.maritime_ships.map((s: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [s.lng, s.lat] }, properties: { id: s.id ?? s.mmsi, mmsi: s.mmsi, imo: s.imo, has_imo: !!s.imo, name: s.name || s.mmsi?.toString(), type: s.type || 'cargo', speed: s.speed, heading: s.heading, destination: s.destination, flag: s.flag, age_s: ageSeconds(s) } })) : []);
   }, [mapReady, data.maritime_ports, data.maritime_chokepoints, data.maritime_ships, activeLayers.maritime, activeLayers.vessels, setGeo]);
 
   // ── TimeTravel replay: paint the current frame + hide live moving layers ──
