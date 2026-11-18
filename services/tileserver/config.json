@@ -1,0 +1,21 @@
+{
+  "options": {
+    "paths": {
+      "root": "",
+      "fonts": "fonts",
+      "sprites": "sprites",
+      "styles": "styles",
+      "mbtiles": "."
+    }
+  },
+  "styles": {
+    "dark": {
+      "style": "dark/style.json"
+    }
+  },
+  "data": {
+    "horus": {
+      "mbtiles": "horus-basemap.mbtiles"
+    }
+  }
+}
