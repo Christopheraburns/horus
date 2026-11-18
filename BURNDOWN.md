@@ -66,10 +66,10 @@ Inventory and details: [docs/AIRGAP.md](docs/AIRGAP.md).
 
 | ID | Item | Done when | Est | Status |
 |---|---|---|---|---|
-| 7.1 | Self-host the web fonts | No `fonts.googleapis.com` request | 0.5 | Todo |
-| 7.2 | PIPELINE mode: no reverse geocode under the cursor | No `nominatim` request while panning | 0.5 | Todo |
-| 7.3 | PIPELINE mode: global stats from gateway feeds only | `/api/stats` makes no public calls | 1 | Todo |
-| 7.4 | PIPELINE mode: hide satellite imagery and 3D buildings; no OpenFreeMap fallback | No Esri or OpenFreeMap request | 1 | Todo |
+| 7.1 | Self-host the web fonts | No `fonts.googleapis.com` request | 0.5 | Done |
+| 7.2 | PIPELINE mode: no reverse geocode under the cursor | No `nominatim` request while panning | 0.5 | Done |
+| 7.3 | PIPELINE mode: global stats from gateway feeds only | `/api/stats` makes no public calls | 1 | Done |
+| 7.4 | PIPELINE mode: hide satellite imagery and 3D buildings; no OpenFreeMap fallback | No Esri or OpenFreeMap request | 1 | Done |
 | 7.5 | PIPELINE mode: region dossier and search from Memgraph, plus coordinate entry | No Nominatim, Wikipedia, Wikidata or restcountries request | 4 | Todo |
 | 7.6 | Intel resolver: bundled OFAC file; countries from Memgraph; IP lookups off in secure mode | Resolver starts and answers with egress blocked | 3 | Todo |
 | 7.7 | Bake npm and pip dependencies into the runtime images (or internal mirrors) | Applications start with egress blocked | 4 | Todo |

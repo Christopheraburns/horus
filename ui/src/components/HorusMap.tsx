@@ -10,6 +10,8 @@ import {
 } from '@/lib/tileProxy';
 
 interface HorusMapProps {
+  /** False in PIPELINE mode: never fall back to a public basemap. */
+  allowPublicTiles?: boolean;
   data: any;
   activeLayers: Record<string, boolean>;
   onEntityClick?: (entity: any) => void;
@@ -47,7 +49,10 @@ function computeSolarTerminator(): [number, number][] {
 
 const EMPTY_FC = { type: 'FeatureCollection' as const, features: [] };
 
-function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', mapStyle = 'dark', demoMode = false, theme = 'core', timeTravelActive = false, timeTravelFrame = [] }: HorusMapProps) {
+function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', mapStyle = 'dark', demoMode = false, theme = 'core', timeTravelActive = false, timeTravelFrame = [], allowPublicTiles = true }: HorusMapProps) {
+  // Read inside the map's one-time error handler, so keep the latest value in a ref.
+  const allowPublicTilesRef = useRef(allowPublicTiles);
+  allowPublicTilesRef.current = allowPublicTiles;
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
@@ -158,6 +163,11 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
       if (fallbackApplied) return;
       const msg = e.error?.message ?? '';
       if (!msg.includes('Failed to fetch') && !msg.includes('404') && !msg.includes('NetworkError')) return;
+      if (!allowPublicTilesRef.current) {
+        // PIPELINE mode: stay on the Horus tile server; never call OpenFreeMap.
+        console.warn('[HORUS] Horus tile server unreachable; no public fallback in PIPELINE mode');
+        return;
+      }
       fallbackApplied = true;
       console.warn('[HORUS] Local basemap failed; switching to OpenFreeMap fallback');
       map.setStyle(OPENFREEMAP_DARK_STYLE);

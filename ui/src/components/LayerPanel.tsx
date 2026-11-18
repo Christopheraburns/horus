@@ -15,6 +15,8 @@ interface LayerPanelProps {
   isMobile?: boolean;
   theme?: 'core' | 'ghost';
   setTheme?: (theme: 'core' | 'ghost') => void;
+  /** SOURCE: PIPELINE. Hides layers that need public map tiles (3D buildings). */
+  pipelineMode?: boolean;
 }
 
 const getLayerGroups = (theme: 'core' | 'ghost') => {
@@ -130,10 +132,15 @@ function Shield(props: any) {
   );
 }
 
-function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'core', setTheme }: LayerPanelProps) {
+/** Layers that load map tiles from public servers; hidden in PIPELINE mode. */
+const PUBLIC_TILE_LAYERS = new Set(['terrain_3d']);
+
+function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'core', setTheme, pipelineMode = false }: LayerPanelProps) {
   const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
 
-  const LAYER_GROUPS = getLayerGroups(theme);
+  const LAYER_GROUPS = getLayerGroups(theme)
+    .map(g => ({ ...g, layers: pipelineMode ? g.layers.filter((l: any) => !PUBLIC_TILE_LAYERS.has(l.key)) : g.layers }))
+    .filter(g => g.layers.length > 0);
   const ALL_LAYERS = LAYER_GROUPS.flatMap(g => g.layers);
 
   const toggle = (key: string) => setActiveLayers((prev: any) => ({ ...prev, [key]: !prev[key] }));

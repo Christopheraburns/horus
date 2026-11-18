@@ -51,25 +51,25 @@ feed at all.
 
 Next.js telemetry is already disabled (`NEXT_TELEMETRY_DISABLED=1` in [launch_ui.py](../ui/launch_ui.py)).
 
-## 4. Browser: always, or on use (these leak in PIPELINE mode)
+## 4. Browser: always, or on use
 
 | # | What | Endpoint | When | Code |
 |---|---|---|---|---|
-| B1 | Web fonts (Inter, JetBrains Mono) | `fonts.googleapis.com`, `fonts.gstatic.com` | **Always**, every page load | [globals.css:1](../ui/src/app/globals.css#L1), [layout.tsx](../ui/src/app/layout.tsx) |
-| B2 | Place name under the cursor (reverse geocode) | `nominatim.openstreetmap.org/reverse` | **Always**, as the mouse moves (throttled and cached) | [page.tsx:277](../ui/src/app/page.tsx#L277) |
+| B1 | Web fonts (Inter, JetBrains Mono) | `fonts.googleapis.com`, `fonts.gstatic.com` | **Always**, every page load | [globals.css:1](../ui/src/app/globals.css#L1), [layout.tsx](../ui/src/app/layout.tsx) — **Fixed (7.1):** fonts are self-hosted with `@fontsource` and bundled into the build. |
+| B2 | Place name under the cursor (reverse geocode) | `nominatim.openstreetmap.org/reverse` | **Always**, as the mouse moves (throttled and cached) | [page.tsx:277](../ui/src/app/page.tsx#L277) — **Fixed (7.2):** off in PIPELINE mode; the LOC readout is hidden and COORD remains. |
 | B3 | Search bar | `nominatim.openstreetmap.org/search` | On use | [SearchBar.tsx:170](../ui/src/components/SearchBar.tsx#L170) |
-| B4 | Satellite basemap | `server.arcgisonline.com` (Esri World Imagery) | On use: satellite map style | [page.tsx:638](../ui/src/app/page.tsx#L638), [HorusMap.tsx:1484](../ui/src/components/HorusMap.tsx#L1484) |
-| B5 | 3D buildings | `tiles.openfreemap.org/planet` | On use: 3D terrain toggle | [HorusMap.tsx:1417](../ui/src/components/HorusMap.tsx#L1417) |
-| B6 | Fallback basemap | `tiles.openfreemap.org/styles/dark` | Only if the Horus tile server fails | [tileProxy.ts](../ui/src/lib/tileProxy.ts), [HorusMap.tsx:162](../ui/src/components/HorusMap.tsx#L162) |
+| B4 | Satellite basemap | `server.arcgisonline.com` (Esri World Imagery) | On use: satellite map style | [page.tsx:638](../ui/src/app/page.tsx#L638), [HorusMap.tsx:1484](../ui/src/components/HorusMap.tsx#L1484) — **Fixed (7.4):** the toggle is hidden in PIPELINE mode, and switching to PIPELINE turns it off. |
+| B5 | 3D buildings | `tiles.openfreemap.org/planet` | On use: 3D terrain toggle | [HorusMap.tsx:1417](../ui/src/components/HorusMap.tsx#L1417) — **Fixed (7.4):** the layer is hidden in PIPELINE mode, and switching to PIPELINE turns it off. |
+| B6 | Fallback basemap | `tiles.openfreemap.org/styles/dark` | Only if the Horus tile server fails | [tileProxy.ts](../ui/src/lib/tileProxy.ts), [HorusMap.tsx:162](../ui/src/components/HorusMap.tsx#L162) — **Fixed (7.4):** there is no fallback in PIPELINE mode; the map stays on the Horus tile server. |
 | B7 | Camera images and video | each camera operator's host (about 60 sources) | PUBLIC: CCTV layer | [CameraViewer.tsx](../ui/src/components/CameraViewer.tsx) |
 | B8 | Embedded video | `youtube.com`, `youtube-nocookie.com`, `rumble.com` | PUBLIC: live news and alerts | [LiveAlerts.tsx](../ui/src/components/LiveAlerts.tsx) |
 | B9 | Links in popups and the Share panel | FlightAware, MarineTraffic, Google Maps, X, Reddit, LinkedIn and others | Only when clicked; these are navigations, not background calls | [HorusMap.tsx](../ui/src/components/HorusMap.tsx), [SharePanel.tsx](../ui/src/components/SharePanel.tsx) |
 
-## 5. UI server: always, or on use (these leak in PIPELINE mode)
+## 5. UI server: always, or on use
 
 | # | What | Endpoint | When | Code |
 |---|---|---|---|---|
-| S1 | Global stats | runs `/api/satellites`, `/api/cctv`, `/api/infrastructure` and `/api/gdelt` on the server, each calling its public source (flights and weather use the gateway) | **Always**, on page load | [page.tsx:230](../ui/src/app/page.tsx#L230), [api/stats](../ui/src/app/api/stats/route.ts) |
+| S1 | Global stats | runs `/api/satellites`, `/api/cctv`, `/api/infrastructure` and `/api/gdelt` on the server, each calling its public source (flights and weather use the gateway) | **Always**, on page load | [page.tsx:230](../ui/src/app/page.tsx#L230), [api/stats](../ui/src/app/api/stats/route.ts) — **Fixed (7.3):** PIPELINE mode counts only flights and weather from the gateway; the other four are skipped. |
 | S2 | Region dossier | `nominatim.openstreetmap.org`, `restcountries.com`, `en.wikipedia.org`, `query.wikidata.org` | On use: right-click on the map | [api/region-dossier](../ui/src/app/api/region-dossier/route.ts) |
 | S3 | Fly to your city | `ip-api.com`, `ipapi.co`, `freeipapi.com` | **Disabled** (`FLY_TO_VISITOR_CITY = false`) | [api/geo](../ui/src/app/api/geo/route.ts) |
 | S4 | Entity intel | the Horus intel resolver (see section 6) | On use: opening an entity | [api/entity/expand](../ui/src/app/api/entity/expand/route.ts) |
@@ -122,10 +122,10 @@ environment.
 
 | # | Fix | Closes | Size |
 |---|---|---|---|
-| 8.1 | Self-host the two fonts (files in `ui/public`) | B1 | S |
-| 8.2 | In PIPELINE mode, show coordinates only, with no reverse geocode | B2 | S |
-| 8.3 | In PIPELINE mode, compute global stats from the gateway feeds only | S1 | S |
-| 8.4 | In PIPELINE mode, hide the satellite style and 3D buildings toggles, and show an error instead of the OpenFreeMap fallback | B4, B5, B6 | S |
+| 8.1 | Self-host the two fonts — **done** | B1 | S |
+| 8.2 | In PIPELINE mode, show coordinates only, with no reverse geocode — **done** | B2 | S |
+| 8.3 | In PIPELINE mode, compute global stats from the gateway feeds only — **done** | S1 | S |
+| 8.4 | In PIPELINE mode, hide the satellite style and 3D buildings toggles, and show an error instead of the OpenFreeMap fallback — **done** | B4, B5, B6 | S |
 | 8.5 | Region dossier and search in PIPELINE mode from Memgraph (Country and Place nodes) and coordinate entry; otherwise disabled | S2, B3 | M |
 | 8.6 | Intel resolver: load the OFAC list from a bundled file (`INTEL_SDN_FILE`); in secure mode, resolve countries from Memgraph and turn IP lookups off | I1, I2, I3 | S |
 | 8.7 | Bake npm and pip dependencies into the runtime images, or document internal mirrors | section 3 | M |

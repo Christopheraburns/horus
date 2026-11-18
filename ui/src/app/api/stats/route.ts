@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isSecured } from '@/lib/connectionMode';
 
 /**
  * HORUS — Global Stats API
@@ -13,18 +14,29 @@ import { NextResponse } from 'next/server';
  * lightweight stats route safely serves 10k concurrent users instantly.
  */
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: Request) {
   try {
     const origin = new URL(req.url).origin;
 
-    // Fetch all internal APIs in parallel (they have their own Cache-Control TTLs)
+    // PIPELINE mode: count only the gateway-backed feeds (flights, weather).
+    // Satellites, CCTV, infrastructure and GDELT come from public APIs, so they
+    // are skipped (reported as 0) and this route makes no internet calls.
+    const pipeline = isSecured();
+    const skipped = Promise.reject(new Error('skipped in PIPELINE mode'));
+    skipped.catch(() => {});
+    const get = (path: string, revalidate: number, publicOnly: boolean) =>
+      publicOnly && pipeline ? skipped : fetch(`${origin}${path}`, { next: { revalidate } });
+
+    // Fetch the internal APIs in parallel (they have their own Cache-Control TTLs)
     const [flightsRes, satsRes, cctvRes, weatherRes, infraRes, gdeltRes] = await Promise.allSettled([
-      fetch(`${origin}/api/flights`, { next: { revalidate: 45 } }),
-      fetch(`${origin}/api/satellites`, { next: { revalidate: 3600 } }),
-      fetch(`${origin}/api/cctv`, { next: { revalidate: 3600 } }),
-      fetch(`${origin}/api/weather`, { next: { revalidate: 300 } }),
-      fetch(`${origin}/api/infrastructure`, { next: { revalidate: 86400 } }),
-      fetch(`${origin}/api/gdelt`, { next: { revalidate: 300 } })
+      get('/api/flights', 45, false),
+      get('/api/satellites', 3600, true),
+      get('/api/cctv', 3600, true),
+      get('/api/weather', 300, false),
+      get('/api/infrastructure', 86400, true),
+      get('/api/gdelt', 300, true),
     ]);
 
     let flights = 0;
@@ -80,7 +92,8 @@ export async function GET(req: Request) {
       timestamp: new Date().toISOString()
     }, {
       headers: {
-        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+        // Not shared-cached: the result depends on the server-wide SOURCE mode.
+        'Cache-Control': 'no-store',
       }
     });
 

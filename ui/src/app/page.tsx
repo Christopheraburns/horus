@@ -165,6 +165,14 @@ export default function Dashboard() {
   const [liveFeedName, setLiveFeedName] = useState('');
   const [liveFeedEmbedAllowed, setLiveFeedEmbedAllowed] = useState(true);
 
+  // PIPELINE mode: turn off the views that load public map tiles (Esri satellite
+  // imagery, OpenFreeMap 3D buildings) so the browser only talks to Horus.
+  useEffect(() => {
+    if (!securedMode) return;
+    setMapStyle('dark');
+    setActiveLayers(prev => (prev.terrain_3d ? { ...prev, terrain_3d: false } : prev));
+  }, [securedMode, activeLayers.terrain_3d]);
+
   // On mount: restore layers and deep links from the URL (IP fly-to is disabled below)
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -266,6 +274,9 @@ export default function Dashboard() {
       coordsDisplayRef.current.innerText = `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`;
     }
     if (geocodeTimer.current) clearTimeout(geocodeTimer.current);
+    // PIPELINE mode: no reverse geocode. It calls the public Nominatim service
+    // from the browser, so only coordinates are shown (air-gap safe).
+    if (connModeRef.current.secured) return;
     geocodeTimer.current = setTimeout(async () => {
       if (lastGeocodedPos.current) {
         const d = Math.abs(coords.lat - lastGeocodedPos.current.lat) + Math.abs(coords.lng - lastGeocodedPos.current.lng);
@@ -632,6 +643,7 @@ export default function Dashboard() {
       <ErrorBoundary name="Map">
         <HorusMap 
           key={horusTheme}
+          allowPublicTiles={!securedMode}
           data={data} 
           activeLayers={activeLayers} 
           projection={mapProjection} 
@@ -678,21 +690,23 @@ export default function Dashboard() {
           </span>
         </button>
 
-        {/* Map Style Toggle */}
-        <button
-          onClick={() => setMapStyle(s => s === 'dark' ? 'satellite' : 'dark')}
-          className="glass-panel p-3.5 pointer-events-auto hover:border-[var(--gold-primary)]/40 transition-colors group relative"
-          title={mapStyle === 'dark' ? 'Satellite View' : 'Night View'}
-        >
-          {mapStyle === 'dark' ? (
-            <Satellite className="w-5 h-5 text-[var(--alert-green)] group-hover:scale-110 transition-transform" />
-          ) : (
-            <Moon className="w-5 h-5 text-[var(--cyan-primary)] group-hover:scale-110 transition-transform" />
-          )}
-          <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 text-[9px] font-mono text-[var(--text-muted)] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity glass-panel px-2 py-1 z-[300]">
-            {mapStyle === 'dark' ? 'SATELLITE' : 'NIGHT MODE'}
-          </span>
-        </button>
+        {/* Map Style Toggle (satellite imagery is a public tile server: hidden in PIPELINE mode) */}
+        {!securedMode && (
+          <button
+            onClick={() => setMapStyle(s => s === 'dark' ? 'satellite' : 'dark')}
+            className="glass-panel p-3.5 pointer-events-auto hover:border-[var(--gold-primary)]/40 transition-colors group relative"
+            title={mapStyle === 'dark' ? 'Satellite View' : 'Night View'}
+          >
+            {mapStyle === 'dark' ? (
+              <Satellite className="w-5 h-5 text-[var(--alert-green)] group-hover:scale-110 transition-transform" />
+            ) : (
+              <Moon className="w-5 h-5 text-[var(--cyan-primary)] group-hover:scale-110 transition-transform" />
+            )}
+            <span className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 text-[9px] font-mono text-[var(--text-muted)] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity glass-panel px-2 py-1 z-[300]">
+              {mapStyle === 'dark' ? 'SATELLITE' : 'NIGHT MODE'}
+            </span>
+          </button>
+        )}
 
       </motion.div>
 
@@ -757,7 +771,7 @@ export default function Dashboard() {
 
 
       {/* ── NEW SIDEBAR (Root Level) ── */}
-      {showLayers && !isMobile && <LayerPanel data={data} activeLayers={activeLayers} setActiveLayers={setActiveLayers} theme={horusTheme} setTheme={setHorusTheme} />}
+      {showLayers && !isMobile && <LayerPanel data={data} activeLayers={activeLayers} setActiveLayers={setActiveLayers} pipelineMode={securedMode} theme={horusTheme} setTheme={setHorusTheme} />}
 
 
 
@@ -936,7 +950,7 @@ export default function Dashboard() {
                           <div><div className="hud-label" style={{fontSize:'6px'}}>NUC</div><div className="hud-value text-[9px]" style={{color:'var(--accent-nuclear)'}}>{(data.infrastructure?.length||0)}</div></div>
                         </div>
                       </div>
-                      <LayerPanel data={data} activeLayers={activeLayers} setActiveLayers={setActiveLayers} isMobile={true} theme={horusTheme} setTheme={setHorusTheme} />
+                      <LayerPanel data={data} activeLayers={activeLayers} setActiveLayers={setActiveLayers} pipelineMode={securedMode} isMobile={true} theme={horusTheme} setTheme={setHorusTheme} />
                       <div className="mt-8">
                         <ViewPresets onNavigate={(lat, lng, zoom) => { setFlyToLocation({ lat, lng, ts: Date.now() }); setMapView(v => ({ ...v, zoom })); setMobilePanel(null); }} />
                       </div>
@@ -964,10 +978,12 @@ export default function Dashboard() {
               <span>COORD</span>
               <span ref={coordsDisplayRef} className="text-[var(--gold-primary)] font-bold tabular-nums">—</span>
             </div>
-            <div className="flex gap-2 items-center">
-              <span>LOC</span>
-              <span className="text-[var(--cyan-primary)] truncate max-w-[200px]">{locationLabel || 'HOVER MAP'}</span>
-            </div>
+            {!securedMode && (
+              <div className="flex gap-2 items-center">
+                <span>LOC</span>
+                <span className="text-[var(--cyan-primary)] truncate max-w-[200px]">{locationLabel || 'HOVER MAP'}</span>
+              </div>
+            )}
             <div className="flex gap-2 items-center">
               <span>Z</span>
               <span className="text-[var(--gold-primary)] font-bold tabular-nums">{mapView.zoom.toFixed(1)}</span>
