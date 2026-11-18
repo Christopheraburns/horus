@@ -13,7 +13,6 @@ export async function GET() {
       '/api/earthquakes',
       '/api/news',
       '/api/gdelt',
-      '/api/markets',
       '/api/frontlines',
       '/api/region-dossier',
     ],
