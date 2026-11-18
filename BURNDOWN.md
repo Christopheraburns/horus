@@ -119,6 +119,14 @@ so flights also come from OpenSky. Both flows publish to the same topic.
 | 10.3 | Dead reckoning: estimate a moving ship's (or aircraft's) current position from its last speed and heading, drawn as an estimate (for example a dashed line from the last fix) | Estimated positions shown and labelled | 4 | Todo |
 | 10.4 | Commercial aircraft are thinned 10x before drawing (upstream OSIRIS performance shortcut in `HorusMap` `toFeatures(..., 10)`); review now that counts are lower | Decision made; thinning removed or zoom-dependent | 1 | Todo |
 
+## 11. AI answers (Ask Horus, Pattern of Life)
+
+| ID | Item | Done when | Est | Status |
+|---|---|---|---|---|
+| 11.1 | Selecting another entity clears the previous Ask Horus and Pattern-of-Life results and aborts streams still running (browser to gateway to LLM) | No text from a previous asset appears | 1 | Done |
+| 11.2 | Short-lived gateway cache for Pattern of Life, keyed by entity, window and time bucket (about 10 min); the panel shows "generated N min ago" with a refresh button | A repeat request within the window returns instantly | 2 | Todo |
+| 11.3 | Record every generated answer (question, entity, facts used, model, timestamp) in an Iceberg table: an audit trail and lineage for AI output | Answers queryable in Trino | 3 | Todo |
+
 ## Carried over
 
 | ID | Item | Status |

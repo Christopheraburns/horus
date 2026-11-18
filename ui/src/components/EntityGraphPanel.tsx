@@ -87,8 +87,29 @@ function EntityGraphPanel({ entity, onClose }: Props) {
   const [polLoading, setPolLoading] = useState(false);
   const [polError, setPolError] = useState<string | null>(null);
 
+  // In-flight LLM streams. Selecting another entity aborts them, and each run
+  // only writes state while it is still the current run, so text from a
+  // previous asset can never land in the new asset's panel.
+  const intelRun = useRef<{ id: number; ctl: AbortController | null }>({ id: 0, ctl: null });
+  const polRun = useRef<{ id: number; ctl: AbortController | null }>({ id: 0, ctl: null });
+  const startRun = (run: typeof intelRun) => {
+    run.current.ctl?.abort();
+    const ctl = new AbortController();
+    run.current = { id: run.current.id + 1, ctl };
+    return { id: run.current.id, signal: ctl.signal };
+  };
+  const cancelRun = (run: typeof intelRun) => {
+    run.current.ctl?.abort();
+    run.current = { id: run.current.id + 1, ctl: null };
+  };
+  const isAbort = (e: unknown) => e instanceof DOMException && e.name === 'AbortError';
+  // Closing the panel stops any stream still running.
+  useEffect(() => () => { intelRun.current.ctl?.abort(); polRun.current.ctl?.abort(); }, []);
+
   const askIntel = useCallback(async (tier: number) => {
     if (!entity || entity.type !== 'aircraft' || intelLoading) return;
+    const run = startRun(intelRun);
+    const current = () => intelRun.current.id === run.id;
     setIntelTier(tier);
     setIntelAnswer('');
     setIntelFacts([]);
@@ -97,6 +118,7 @@ function EntityGraphPanel({ entity, onClose }: Props) {
     try {
       const res = await fetch('/api/intel', {
         method: 'POST',
+        signal: run.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           entity: {
@@ -127,21 +149,24 @@ function EntityGraphPanel({ entity, onClose }: Props) {
           if (!line) continue;
           try {
             const evt = JSON.parse(line);
+            if (!current()) return;
             if (evt.type === 'facts') setIntelFacts(evt.facts || []);
             else if (evt.type === 'token') setIntelAnswer((prev) => prev + evt.text);
           } catch { /* ignore partial/non-JSON line */ }
         }
       }
     } catch (e) {
-      setIntelError(e instanceof Error ? e.message : 'intel failed');
+      if (current() && !isAbort(e)) setIntelError(e instanceof Error ? e.message : 'intel failed');
     } finally {
-      setIntelLoading(false);
+      if (current()) setIntelLoading(false);
     }
   }, [entity, intelLoading]);
 
   const askPatternOfLife = useCallback(async () => {
     if (!entity || polLoading) return;
     if (entity.type !== 'aircraft' && entity.type !== 'vessel') return;
+    const run = startRun(polRun);
+    const current = () => polRun.current.id === run.id;
     setPolLoading(true);
     setPolAnswer('');
     setPolFacts([]);
@@ -165,6 +190,7 @@ function EntityGraphPanel({ entity, onClose }: Props) {
       };
       const res = await fetch('/api/intel/pattern-of-life', {
         method: 'POST',
+        signal: run.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
@@ -186,15 +212,16 @@ function EntityGraphPanel({ entity, onClose }: Props) {
           if (!line) continue;
           try {
             const evt = JSON.parse(line);
+            if (!current()) return;
             if (evt.type === 'facts') setPolFacts(evt.facts || []);
             else if (evt.type === 'token') setPolAnswer((prev) => prev + evt.text);
           } catch { /* ignore partial line */ }
         }
       }
     } catch (e) {
-      setPolError(e instanceof Error ? e.message : 'pattern-of-life failed');
+      if (current() && !isAbort(e)) setPolError(e instanceof Error ? e.message : 'pattern-of-life failed');
     } finally {
-      setPolLoading(false);
+      if (current()) setPolLoading(false);
     }
   }, [entity, polLoading]);
 
@@ -255,10 +282,19 @@ function EntityGraphPanel({ entity, onClose }: Props) {
     setSelectedNode(root);
     setError(null);
     setEnrichNotice(null);
+    // A new entity starts clean: stop any stream still running for the previous
+    // one and clear both the Ask Horus and Pattern-of-Life results.
+    cancelRun(intelRun);
+    cancelRun(polRun);
     setIntelTier(null);
     setIntelAnswer('');
     setIntelFacts([]);
     setIntelError(null);
+    setIntelLoading(false);
+    setPolAnswer('');
+    setPolFacts([]);
+    setPolError(null);
+    setPolLoading(false);
     expandEntity(entity.type, entity.id, entity.properties);
   }, [entity]); // eslint-disable-line react-hooks/exhaustive-deps
 
