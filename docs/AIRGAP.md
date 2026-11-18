@@ -95,7 +95,7 @@ PIPELINE mode suppresses them in the browser, but S1 still calls some of them.
 | Route | Endpoint |
 |---|---|
 | `/api/flights` | `opensky-network.org`, `api.airplanes.live`, `api.adsb.lol` |
-| `/api/maritime` | `aisstream.io` |
+| `/api/maritime` | `aisstream.io` (WebSocket). Opens on the first PUBLIC request and closes when SOURCE is PIPELINE; verified 0 connections in PIPELINE mode. Key: `AIS_API_KEY`, or the project's `HORUS_AISSTREAM_API_KEY` |
 | `/api/earthquakes`, `/api/infrastructure`, `/api/scm-suppliers`, `/api/country-risk` | `earthquake.usgs.gov` |
 | `/api/fires` | `firms.modaps.eosdis.nasa.gov`, `eonet.gsfc.nasa.gov` |
 | `/api/weather` | `api.weather.gov`, `eonet.gsfc.nasa.gov` |
