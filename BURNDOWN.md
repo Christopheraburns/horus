@@ -60,6 +60,23 @@ Work the sections in order; each builds on the one before.
 | 6.4 | Flights: airframe identity, flown tracks (from the lake), multi-aircraft watch | Ported | 6 | Todo |
 | 6.5 | SSO in front of every Application; per-user identity through to Trino and Ranger; drop unauthenticated access | No Application open without login | 8 | Todo |
 
+## 7. Air-gap readiness (PIPELINE mode with no internet calls)
+
+Inventory and details: [docs/AIRGAP.md](docs/AIRGAP.md).
+
+| ID | Item | Done when | Est | Status |
+|---|---|---|---|---|
+| 7.1 | Self-host the web fonts | No `fonts.googleapis.com` request | 0.5 | Todo |
+| 7.2 | PIPELINE mode: no reverse geocode under the cursor | No `nominatim` request while panning | 0.5 | Todo |
+| 7.3 | PIPELINE mode: global stats from gateway feeds only | `/api/stats` makes no public calls | 1 | Todo |
+| 7.4 | PIPELINE mode: hide satellite imagery and 3D buildings; no OpenFreeMap fallback | No Esri or OpenFreeMap request | 1 | Todo |
+| 7.5 | PIPELINE mode: region dossier and search from Memgraph, plus coordinate entry | No Nominatim, Wikipedia, Wikidata or restcountries request | 4 | Todo |
+| 7.6 | Intel resolver: bundled OFAC file; countries from Memgraph; IP lookups off in secure mode | Resolver starts and answers with egress blocked | 3 | Todo |
+| 7.7 | Bake npm and pip dependencies into the runtime images (or internal mirrors) | Applications start with egress blocked | 4 | Todo |
+| 7.8 | Egress test: headless browser in PIPELINE mode records every request; fails on non-Horus hosts | Test passes | 2 | Todo |
+| 7.9 | Sync the browser's SOURCE flag with the server (intel `secure=1`) | Toggle changes intel source | 1 | Todo |
+| 7.10 | Splash screen removed; fly-to-city disabled (code kept) | Done 2026-11-18 | 0.5 | Done |
+
 ## Carried over
 
 | ID | Item | Status |
