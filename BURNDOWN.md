@@ -1,7 +1,10 @@
 # Burn-down: Horus
 
-Status values: Todo / Doing / Done / Blocked / Cut. Estimates are hours.
+Status values: Todo / Doing / Done / Blocked / Cut / Moved. Estimates are hours.
 Work the sections in order; each builds on the one before.
+
+Security and deployment work (dependency upgrades, per-service images, SSO,
+credentials) is tracked separately in [BURNDOWN-DEPLOY.md](BURNDOWN-DEPLOY.md).
 
 ## 1. Mistral as the LLM (Large 4 where possible)
 
@@ -14,12 +17,13 @@ Work the sections in order; each builds on the one before.
 | 1.5 | Docs: INSTALL.md gateway variables; air-gapped option (same variables pointed at an on-prem Mistral or Cloudera AI Inference endpoint) | Section written | 0.5 | Done |
 | 1.6 | Confirm with Mistral which models are licensed for on-prem / air-gapped use (Large 4 vs Medium) | Answer recorded here | – | Todo |
 
-## 2. Upstream OSIRIS security fixes
+## 2. Upstream OSIRIS fixes
+
+The security fixes (Next.js upgrade, upstream security ports) moved to
+BURNDOWN-DEPLOY A1 and A2.
 
 | ID | Item | Done when | Est | Status |
 |---|---|---|---|---|
-| 2.1 | Next.js 16.2.6 → 16.4.3 (security advisories) | Build and smoke test pass | 1 | Todo |
-| 2.2 | Port: image optimizer disabled, tile proxy narrowed, ArcGIS server-side request forgery fix, rate limits that bind | Each fix ported or confirmed not applicable | 3 | Todo |
 | 2.3 | Port #370 (derived or missing data not shown as observed) and #469 (reload on chunk load failure) | Ported | 2 | Todo |
 
 ## 3. Horus MCP server
@@ -27,7 +31,7 @@ Work the sections in order; each builds on the one before.
 | ID | Item | Done when | Est | Status |
 |---|---|---|---|---|
 | 3.1 | Port `osiris/mcp-server` to `services/mcp`: rename, point at the Horus Applications | Tools answer against the dev instance | 3 | Todo |
-| 3.2 | Bearer token required on `/mcp`; Memgraph shim token passed through | Unauthenticated call rejected | 1 | Todo |
+| 3.2 | Bearer token on `/mcp`: moved to BURNDOWN-DEPLOY C3 | – | – | Moved |
 | 3.3 | New tools: lake history query (read-only), alerts, findings | Tools listed and tested | 3 | Todo |
 | 3.4 | Register as a Mistral Studio connector and a Cloudera Agent Studio MCP server | An agent calls a tool from each | 1 | Todo |
 
@@ -48,9 +52,9 @@ Work the sections in order; each builds on the one before.
 | 5.2 | Skills: graph (Memgraph read-only), intel resolver, live feeds (or reuse the MCP server) | Callable from the REPL | 3 | Todo |
 | 5.3 | Investigation method for maritime and aviation anomalies, split by day, entity type and region | Method in AGENTS.md | 3 | Todo |
 | 5.4 | Findings written to `findings_iceberg` with SQL and row counts; shown on the map | One investigation end to end | 4 | Todo |
-| 5.5 | Read-only workload user, read-only Ranger policies, isolated project; validation pass on findings | Policies in place | 2 | Todo |
+| 5.5 | Read-only workload user, read-only Ranger policies, isolated project; validation pass on findings (agent guardrails, needed even for demos) | Policies in place | 2 | Todo |
 
-## 6. Upstream camera, flight and map features; real identity
+## 6. Upstream camera, flight and map features
 
 | ID | Item | Done when | Est | Status |
 |---|---|---|---|---|
@@ -58,11 +62,10 @@ Work the sections in order; each builds on the one before.
 | 6.2 | Camera catalogue as a NiFi feed so cameras work in PIPELINE mode | Cameras render in PIPELINE mode | 4 | Todo |
 | 6.3 | AI Analyze (YOLOX-nano in the browser, model file self-hosted); Identify routed to Mistral through the gateway | Works with no browser key | 4 | Todo |
 | 6.4 | Flights: airframe identity, flown tracks (from the lake), multi-aircraft watch | Ported | 6 | Todo |
-| 6.5 | SSO in front of every Application; per-user identity through to Trino and Ranger; drop unauthenticated access | No Application open without login | 8 | Todo |
 
 ## 7. Air-gap readiness (PIPELINE mode with no internet calls)
 
-Inventory and details: [docs/AIRGAP.md](docs/AIRGAP.md).
+Inventory and details: [docs/AIRGAP.md](docs/AIRGAP.md). Image and install-time items are in [BURNDOWN-DEPLOY.md](BURNDOWN-DEPLOY.md).
 
 | ID | Item | Done when | Est | Status |
 |---|---|---|---|---|
@@ -72,7 +75,7 @@ Inventory and details: [docs/AIRGAP.md](docs/AIRGAP.md).
 | 7.4 | PIPELINE mode: hide satellite imagery and 3D buildings; no OpenFreeMap fallback | No Esri or OpenFreeMap request | 1 | Done |
 | 7.5 | PIPELINE mode: region dossier and search from Memgraph, plus coordinate entry | No Nominatim, Wikipedia, Wikidata or restcountries request | 4 | Todo |
 | 7.6 | Intel resolver: bundled OFAC file; countries from Memgraph; IP lookups off in secure mode | Resolver starts and answers with egress blocked | 3 | Todo |
-| 7.7 | Bake npm and pip dependencies into the runtime images (or internal mirrors) | Applications start with egress blocked | 4 | Todo |
+| 7.7 | Dependencies baked into images: moved to BURNDOWN-DEPLOY section B | – | – | Moved |
 | 7.8 | Egress test: headless browser in PIPELINE mode records every request; fails on non-Horus hosts | Test passes | 2 | Todo |
 | 7.9 | Sync the browser's SOURCE flag with the server (intel `secure=1`) | Toggle changes intel source | 1 | Todo |
 | 7.10 | Splash screen removed; fly-to-city disabled (code kept) | Done 2026-11-18 | 0.5 | Done |
@@ -85,8 +88,6 @@ Inventory and details: [docs/AIRGAP.md](docs/AIRGAP.md).
 | C2 | Verify the NWS weather flow contributes rows | Todo |
 | C3 | `.project-metadata.yaml` (AMP) | Todo |
 | C4 | Fold RUNBOOK.md into INSTALL.md | Todo |
-| C5 | Remove the CDP access key from the Workbench project | Todo |
-| C6 | Rotate the Kafka password committed in the OSIRIS repo | Todo |
 | C7 | Captured-graph gap: the gateway's `graph.py` expects a Neo4j that Horus doesn't run | Todo |
 | C8 | Optional: delete the unused `horus_hive` SSB catalog and old `osiris-*` Docker Hub images | Todo |
 | C9 | UI status bar: `V.4.1` label and the `NEO4J` button that points at localhost | Todo |
