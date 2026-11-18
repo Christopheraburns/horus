@@ -1,0 +1,1244 @@
+{
+  "flowContents": {
+    "identifier": "96c40c82-b631-5e4c-b856-a0807425acbc",
+    "instanceIdentifier": "bf28297f-17f1-503b-829f-85d9bb562130",
+    "name": "HORUS - Flights (OpenSky)",
+    "comments": "",
+    "position": {
+      "x": -760.0,
+      "y": -24.0
+    },
+    "processGroups": [],
+    "remoteProcessGroups": [],
+    "processors": [
+      {
+        "identifier": "58ee2f35-1f19-53eb-8a5b-effddb016d5c",
+        "instanceIdentifier": "bcd3a32e-7efa-59c4-9e99-1b279703abc3",
+        "name": "Trigger OpenSky (90 sec)",
+        "comments": "",
+        "position": {
+          "x": -600.0,
+          "y": -200.0
+        },
+        "type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+        "bundle": {
+          "group": "org.apache.nifi",
+          "artifact": "nifi-standard-nar",
+          "version": "2.6.0.4.12.0.0-914"
+        },
+        "properties": {
+          "character-set": "UTF-8",
+          "File Size": "0B",
+          "mime-type": null,
+          "generate-ff-custom-text": "",
+          "Batch Size": "1",
+          "Unique FlowFiles": "false",
+          "Data Format": "Text"
+        },
+        "propertyDescriptors": {
+          "character-set": {
+            "name": "character-set",
+            "displayName": "Character Set",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "File Size": {
+            "name": "File Size",
+            "displayName": "File Size",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "mime-type": {
+            "name": "mime-type",
+            "displayName": "Mime Type",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "generate-ff-custom-text": {
+            "name": "generate-ff-custom-text",
+            "displayName": "Custom Text",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Batch Size": {
+            "name": "Batch Size",
+            "displayName": "Batch Size",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Unique FlowFiles": {
+            "name": "Unique FlowFiles",
+            "displayName": "Unique FlowFiles",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Data Format": {
+            "name": "Data Format",
+            "displayName": "Data Format",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          }
+        },
+        "style": {},
+        "schedulingPeriod": "90 sec",
+        "schedulingStrategy": "TIMER_DRIVEN",
+        "executionNode": "PRIMARY",
+        "penaltyDuration": "30 sec",
+        "yieldDuration": "1 sec",
+        "bulletinLevel": "WARN",
+        "runDurationMillis": 0,
+        "concurrentlySchedulableTaskCount": 1,
+        "autoTerminatedRelationships": [],
+        "scheduledState": "ENABLED",
+        "retryCount": 10,
+        "retriedRelationships": [],
+        "backoffMechanism": "PENALIZE_FLOWFILE",
+        "maxBackoffPeriod": "10 mins",
+        "componentType": "PROCESSOR",
+        "groupIdentifier": "96c40c82-b631-5e4c-b856-a0807425acbc"
+      },
+      {
+        "identifier": "0d6ed04e-ee2f-5667-b88f-2eb904e71287",
+        "instanceIdentifier": "3c8750b9-8378-5a3c-887e-23b42e215949",
+        "name": "Get OpenSky states",
+        "comments": "",
+        "position": {
+          "x": -184.0,
+          "y": -200.0
+        },
+        "type": "org.apache.nifi.processors.standard.InvokeHTTP",
+        "bundle": {
+          "group": "org.apache.nifi",
+          "artifact": "nifi-standard-nar",
+          "version": "2.6.0.4.12.0.0-914"
+        },
+        "properties": {
+          "Request Content-Encoding": "DISABLED",
+          "proxy-configuration-service": null,
+          "Request Multipart Form-Data Filename Enabled": "true",
+          "Request Chunked Transfer-Encoding Enabled": "false",
+          "Response Header Request Attributes Prefix": null,
+          "HTTP/2 Disabled": "False",
+          "Connection Timeout": "30 secs",
+          "Response Cookie Strategy": "DISABLED",
+          "Socket Read Timeout": "60 secs",
+          "Socket Idle Connections": "5",
+          "Request Body Enabled": "true",
+          "OAuth2 Access Token Refresh Strategy": "ON_TOKEN_EXPIRATION",
+          "HTTP URL": "https://opensky-network.org/api/states/all?extended=1",
+          "Request OAuth2 Access Token Provider": "190eba33-6aa5-56d1-9262-385c1eff67b9",
+          "Socket Idle Timeout": "5 mins",
+          "Response Redirects Enabled": "True",
+          "Socket Write Timeout": "15 secs",
+          "Request Header Attributes Pattern": null,
+          "Response FlowFile Naming Strategy": "RANDOM",
+          "Response Cache Enabled": "false",
+          "Request Date Header Enabled": "True",
+          "Request Failure Penalization Enabled": "false",
+          "Response Body Attribute Size": "256",
+          "SSL Context Service": null,
+          "Response Generation Required": "false",
+          "Request User-Agent": "HORUS-Flight-Layer (#{http.contact})",
+          "Response Header Request Attributes Enabled": "false",
+          "HTTP Method": "GET",
+          "Request Username": null,
+          "Request Content-Type": "${mime.type}",
+          "Response Body Attribute Name": null,
+          "Request Digest Authentication Enabled": "false",
+          "Request Multipart Form-Data Name": null,
+          "Response Cache Size": "10MB",
+          "Response Body Ignored": "false"
+        },
+        "propertyDescriptors": {
+          "Request Content-Encoding": {
+            "name": "Request Content-Encoding",
+            "displayName": "Request Content-Encoding",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "proxy-configuration-service": {
+            "name": "proxy-configuration-service",
+            "displayName": "Proxy Configuration Service",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Multipart Form-Data Filename Enabled": {
+            "name": "Request Multipart Form-Data Filename Enabled",
+            "displayName": "Request Multipart Form-Data Filename Enabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Chunked Transfer-Encoding Enabled": {
+            "name": "Request Chunked Transfer-Encoding Enabled",
+            "displayName": "Request Chunked Transfer-Encoding Enabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response Header Request Attributes Prefix": {
+            "name": "Response Header Request Attributes Prefix",
+            "displayName": "Response Header Request Attributes Prefix",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "HTTP/2 Disabled": {
+            "name": "HTTP/2 Disabled",
+            "displayName": "HTTP/2 Disabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Connection Timeout": {
+            "name": "Connection Timeout",
+            "displayName": "Connection Timeout",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response Cookie Strategy": {
+            "name": "Response Cookie Strategy",
+            "displayName": "Response Cookie Strategy",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Password": {
+            "name": "Request Password",
+            "displayName": "Request Password",
+            "identifiesControllerService": false,
+            "sensitive": true,
+            "dynamic": false
+          },
+          "Socket Read Timeout": {
+            "name": "Socket Read Timeout",
+            "displayName": "Socket Read Timeout",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Socket Idle Connections": {
+            "name": "Socket Idle Connections",
+            "displayName": "Socket Idle Connections",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Body Enabled": {
+            "name": "Request Body Enabled",
+            "displayName": "Request Body Enabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "OAuth2 Access Token Refresh Strategy": {
+            "name": "OAuth2 Access Token Refresh Strategy",
+            "displayName": "OAuth2 Access Token Refresh Strategy",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "HTTP URL": {
+            "name": "HTTP URL",
+            "displayName": "HTTP URL",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request OAuth2 Access Token Provider": {
+            "name": "Request OAuth2 Access Token Provider",
+            "displayName": "Request OAuth2 Access Token Provider",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Socket Idle Timeout": {
+            "name": "Socket Idle Timeout",
+            "displayName": "Socket Idle Timeout",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response Redirects Enabled": {
+            "name": "Response Redirects Enabled",
+            "displayName": "Response Redirects Enabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Socket Write Timeout": {
+            "name": "Socket Write Timeout",
+            "displayName": "Socket Write Timeout",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Header Attributes Pattern": {
+            "name": "Request Header Attributes Pattern",
+            "displayName": "Request Header Attributes Pattern",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response FlowFile Naming Strategy": {
+            "name": "Response FlowFile Naming Strategy",
+            "displayName": "Response FlowFile Naming Strategy",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response Cache Enabled": {
+            "name": "Response Cache Enabled",
+            "displayName": "Response Cache Enabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Date Header Enabled": {
+            "name": "Request Date Header Enabled",
+            "displayName": "Request Date Header Enabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Failure Penalization Enabled": {
+            "name": "Request Failure Penalization Enabled",
+            "displayName": "Request Failure Penalization Enabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response Body Attribute Size": {
+            "name": "Response Body Attribute Size",
+            "displayName": "Response Body Attribute Size",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "SSL Context Service": {
+            "name": "SSL Context Service",
+            "displayName": "SSL Context Service",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response Generation Required": {
+            "name": "Response Generation Required",
+            "displayName": "Response Generation Required",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request User-Agent": {
+            "name": "Request User-Agent",
+            "displayName": "Request User-Agent",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response Header Request Attributes Enabled": {
+            "name": "Response Header Request Attributes Enabled",
+            "displayName": "Response Header Request Attributes Enabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "HTTP Method": {
+            "name": "HTTP Method",
+            "displayName": "HTTP Method",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Username": {
+            "name": "Request Username",
+            "displayName": "Request Username",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Content-Type": {
+            "name": "Request Content-Type",
+            "displayName": "Request Content-Type",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response Body Attribute Name": {
+            "name": "Response Body Attribute Name",
+            "displayName": "Response Body Attribute Name",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Digest Authentication Enabled": {
+            "name": "Request Digest Authentication Enabled",
+            "displayName": "Request Digest Authentication Enabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Multipart Form-Data Name": {
+            "name": "Request Multipart Form-Data Name",
+            "displayName": "Request Multipart Form-Data Name",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response Cache Size": {
+            "name": "Response Cache Size",
+            "displayName": "Response Cache Size",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response Body Ignored": {
+            "name": "Response Body Ignored",
+            "displayName": "Response Body Ignored",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          }
+        },
+        "style": {},
+        "schedulingPeriod": "0 sec",
+        "schedulingStrategy": "TIMER_DRIVEN",
+        "executionNode": "ALL",
+        "penaltyDuration": "30 sec",
+        "yieldDuration": "1 sec",
+        "bulletinLevel": "WARN",
+        "runDurationMillis": 0,
+        "concurrentlySchedulableTaskCount": 1,
+        "autoTerminatedRelationships": [
+          "Retry",
+          "Original"
+        ],
+        "scheduledState": "ENABLED",
+        "retryCount": 10,
+        "retriedRelationships": [],
+        "backoffMechanism": "PENALIZE_FLOWFILE",
+        "maxBackoffPeriod": "10 mins",
+        "componentType": "PROCESSOR",
+        "groupIdentifier": "96c40c82-b631-5e4c-b856-a0807425acbc"
+      },
+      {
+        "identifier": "9ec66b9a-2be7-50a6-b6b8-777721734648",
+        "instanceIdentifier": "9d32754e-2b0a-5e1d-aff0-e5cab7689b99",
+        "name": "Transform OpenSky to Horus events",
+        "comments": "",
+        "position": {
+          "x": -184.0,
+          "y": 312.0
+        },
+        "type": "org.apache.nifi.processors.script.ExecuteScript",
+        "bundle": {
+          "group": "org.apache.nifi",
+          "artifact": "nifi-scripting-nar",
+          "version": "2.6.0.4.12.0.0-914"
+        },
+        "properties": {
+          "Script File": null,
+          "Script Engine": "Groovy",
+          "Script Body": "/**\n * NiFi ExecuteScript: OpenSky state vectors -> canonical horus-events Kafka messages.\n *\n * Input:  FlowFile body = OpenSky JSON from InvokeHTTP\n *         GET https://opensky-network.org/api/states/all?extended=1\n *         { \"time\": <unix s>, \"states\": [ [18 fields], ... ] }\n * Output: one FlowFile per airborne aircraft, in the same envelope the adsb.lol\n *         flow emits (schema_version 1), so the gateway, Flink and the lake need\n *         no changes.\n *\n * Source of truth for the script body in nifi/HORUS_Flights_OpenSky.json; that\n * flow file is generated by tools/build_opensky_flow.py.\n *\n * State vector fields (OpenSky REST docs):\n *   0 icao24, 1 callsign, 2 origin_country, 3 time_position, 4 last_contact,\n *   5 longitude, 6 latitude, 7 baro_altitude (m), 8 on_ground, 9 velocity (m/s),\n *   10 true_track (deg), 11 vertical_rate (m/s), 12 sensors, 13 geo_altitude (m),\n *   14 squawk, 15 spi, 16 position_source, 17 category (with extended=1)\n *\n * Notes:\n *   - The timestamp is the aircraft's own position time (time_position), not the\n *     time NiFi ran, so the same position seen twice de-duplicates in Flink.\n *   - OpenSky reports category 0 (\"no information\") for most aircraft and has no\n *     type code or registration, so classification is by callsign:\n *       military   = UAV / high-performance category, or a military callsign prefix\n *       commercial = airline-style callsign (three letters + digits)\n *       private    = anything else (registration-style callsigns such as N123AB)\n *     'jet' needs type codes; it returns once the OpenSky aircraft database is\n *     used for enrichment.\n *   - Explicit list indexing and f['key'] access throughout (bean-accessor trap).\n */\nimport groovy.json.JsonSlurper\nimport groovy.json.JsonOutput\nimport java.time.Instant\nimport java.time.ZoneOffset\nimport java.time.format.DateTimeFormatter\n\ndef flowFile = session.get()\nif (!flowFile) return\n\n// Positions older than this (seconds, relative to the response time) are dropped.\ndef MAX_POSITION_AGE_S = 90\n\n// Military callsign prefixes (transport, tanker, VIP and air force call signs).\n// Checked before the airline pattern, because several are three letters + digits.\ndef MIL_CALLSIGN_RE = ~/^(RCH|REACH|KING|DUKE|EVAC|JAKE|CONVOY|CNV|SPAR|SAM|NAVY|ARMY|ASCOT|RRR|GAF|IAM|BAF|CFC|NATO|LAGR|FORTE|HOMER)\\d/\ndef AIRLINE_CODE_RE = ~/^([A-Z]{3})\\d/\n\n// OpenSky emitter categories\ndef CAT_ROTORCRAFT = 8\ndef CAT_HIGH_PERF = 7\ndef CAT_UAV = 14\ndef SKIP_CATEGORIES = [15, 16, 17, 18, 19, 20] as Set   // space vehicle, ground vehicles, obstacles\ndef PRIVATE_CATEGORIES = [2, 9, 12] as Set             // light, glider, ultralight\n\ndef ISO = DateTimeFormatter.ofPattern(\"yyyy-MM-dd'T'HH:mm:ss'Z'\")\ndef iso = { long epochSeconds -> Instant.ofEpochSecond(epochSeconds).atOffset(ZoneOffset.UTC).format(ISO) }\n\ndef payload = new JsonSlurper().parseText(session.read(flowFile).text)\ndef responseTime = (payload?.get('time') ?: Instant.now().epochSecond) as long\ndef states = (payload?.get('states')) ?: []\n\ndef capturedAt = iso(Instant.now().epochSecond)\ndef ingestRunId = flowFile.getAttribute('ingest.run.id') ?: ('nifi-' + UUID.randomUUID().toString().take(12))\ndef provider  = 'opensky'\ndef feed      = 'flights'\ndef sourceUrl = flowFile.getAttribute('invokehttp.request.url') ?: 'https://opensky-network.org/api/states/all'\ndef emitted = 0\ndef skipped = 0\n\nstates.each { s ->\n    if (!(s instanceof List) || s.size() < 17) { skipped++; return }\n    def hex       = ((s[0] ?: '') as String).toLowerCase()\n    def callsign  = ((s[1] ?: '') as String).trim().toUpperCase()\n    def timePos   = s[3]\n    def lon       = s[5]\n    def lat       = s[6]\n    def baroAlt   = s[7]\n    def onGround  = s[8] as Boolean\n    def velocity  = s[9]\n    def track     = s[10]\n    def geoAlt    = s[13]\n    def squawk    = s[14]\n    def posSource = s[16]\n    def cat       = (s.size() > 17 && s[17] instanceof Number) ? (s[17] as Integer) : 0\n\n    if (!hex || lat == null || lon == null || timePos == null) { skipped++; return }\n    if (onGround) { skipped++; return }\n    if (SKIP_CATEGORIES.contains(cat)) { skipped++; return }\n    if (responseTime - (timePos as long) > MAX_POSITION_AGE_S) { skipped++; return }\n\n    def name = callsign ?: hex\n    def altMeters = (baroAlt instanceof Number) ? (baroAlt as Double)\n                  : ((geoAlt instanceof Number) ? (geoAlt as Double) : 0.0d)\n    def speedKnots = (velocity instanceof Number) ? (Math.round((velocity as Double) * 1.943844 * 10) / 10.0d) : null\n    def heading = (track instanceof Number) ? (track as Double) : 0.0d\n\n    def airlineMatch = AIRLINE_CODE_RE.matcher(callsign)\n    def airlineCode = airlineMatch.find() ? airlineMatch.group(1) : ''\n\n    def category = 'private'\n    if (cat == CAT_UAV || cat == CAT_HIGH_PERF || MIL_CALLSIGN_RE.matcher(callsign).find()) {\n        category = 'military'\n    } else if (airlineCode && !PRIVATE_CATEGORIES.contains(cat)) {\n        category = 'commercial'\n    }\n\n    def entity = [\n        id            : hex,\n        name          : name,\n        domain        : 'AIR',\n        entityType    : 'FLIGHT',\n        position      : [lat: lat as Double, lng: lon as Double, alt: altMeters],\n        threat        : (category == 'military') ? 'LOW' : 'NONE',\n        classification: 'UNCLASSIFIED',\n        confidence    : 0.9,\n        timestamp     : iso(timePos as long),\n        source        : [\n            provider  : provider,\n            feed      : feed,\n            originalId: hex,\n            confidence: 0.9,\n            sourceUrl : sourceUrl,\n        ],\n        properties    : [\n            callsign         : name,\n            category         : category,            // commercial | private | military\n            aircraft_category: (cat == CAT_ROTORCRAFT) ? 'heli' : 'plane',\n            model            : 'Unknown',            // not in OpenSky live data\n            icao24           : hex,\n            registration     : 'N/A',                // not in OpenSky live data\n            squawk           : (squawk ?: ''),\n            airline_code     : airlineCode,\n            heading          : Math.round(heading),\n            speed_knots      : speedKnots,\n            grounded         : false,\n            origin_country   : (s[2] ?: ''),\n            position_source  : posSource,\n            emitter_category : cat,\n        ],\n    ]\n\n    def traceId = UUID.randomUUID().toString()\n    def envelope = [\n        schema_version: 1,\n        trace_id      : traceId,\n        ingest_run_id : ingestRunId,\n        source        : feed,\n        captured_at   : capturedAt,\n        entity        : entity,\n    ]\n\n    def out = session.create(flowFile)\n    out = session.write(out, { outStream ->\n        outStream.write(JsonOutput.toJson(envelope).getBytes('UTF-8'))\n    } as OutputStreamCallback)\n    out = session.putAttribute(out, 'mime.type', 'application/json')\n    out = session.putAttribute(out, 'kafka.key', hex)\n    out = session.putAttribute(out, 'trace.id', traceId)\n    session.transfer(out, REL_SUCCESS)\n    emitted++\n}\n\nif (emitted == 0) {\n    log.warn(\"No flight entities emitted from OpenSky payload (${states.size()} states, ${skipped} skipped)\")\n    session.transfer(flowFile, REL_FAILURE)\n} else {\n    log.info(\"Emitted ${emitted} flight entities from OpenSky (${skipped} skipped)\")\n    session.remove(flowFile)\n}\n",
+          "Module Directory": null
+        },
+        "propertyDescriptors": {
+          "Script File": {
+            "name": "Script File",
+            "displayName": "Script File",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false,
+            "resourceDefinition": {
+              "cardinality": "SINGLE",
+              "resourceTypes": [
+                "FILE"
+              ]
+            }
+          },
+          "Script Engine": {
+            "name": "Script Engine",
+            "displayName": "Script Engine",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Script Body": {
+            "name": "Script Body",
+            "displayName": "Script Body",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Module Directory": {
+            "name": "Module Directory",
+            "displayName": "Module Directory",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false,
+            "resourceDefinition": {
+              "cardinality": "MULTIPLE",
+              "resourceTypes": [
+                "DIRECTORY",
+                "FILE"
+              ]
+            }
+          }
+        },
+        "style": {},
+        "schedulingPeriod": "0 sec",
+        "schedulingStrategy": "TIMER_DRIVEN",
+        "executionNode": "ALL",
+        "penaltyDuration": "30 sec",
+        "yieldDuration": "1 sec",
+        "bulletinLevel": "WARN",
+        "runDurationMillis": 0,
+        "concurrentlySchedulableTaskCount": 1,
+        "autoTerminatedRelationships": [],
+        "scheduledState": "ENABLED",
+        "retryCount": 10,
+        "retriedRelationships": [],
+        "backoffMechanism": "PENALIZE_FLOWFILE",
+        "maxBackoffPeriod": "10 mins",
+        "componentType": "PROCESSOR",
+        "groupIdentifier": "96c40c82-b631-5e4c-b856-a0807425acbc"
+      },
+      {
+        "identifier": "534902eb-6a29-5a6e-8bd7-d4b4c31c554d",
+        "instanceIdentifier": "c28ad929-0a83-578e-9d24-b867759dc80a",
+        "name": "PublishKafka",
+        "comments": "",
+        "position": {
+          "x": -176.0,
+          "y": 608.0
+        },
+        "type": "org.apache.nifi.kafka.processors.PublishKafka",
+        "bundle": {
+          "group": "org.apache.nifi",
+          "artifact": "nifi-kafka-nar",
+          "version": "2.6.0.4.12.0.0-914"
+        },
+        "properties": {
+          "compression.type": "none",
+          "acks": "all",
+          "Message Demarcator": null,
+          "Kafka Key Attribute Encoding": "utf-8",
+          "Record Reader": null,
+          "Record Metadata Strategy": "FROM_PROPERTIES",
+          "Transactional ID Prefix": null,
+          "Header Encoding": "UTF-8",
+          "max.request.size": "1 MB",
+          "Topic Name": "#{kafka.topic}",
+          "Kafka Key": null,
+          "partition": null,
+          "Kafka Connection Service": "e4fb5fba-69a2-5e7c-b4cd-8a43d12ef2c6",
+          "Publish Strategy": "USE_VALUE",
+          "Record Key Writer": null,
+          "Failure Strategy": "Route to Failure",
+          "partitioner.class": "org.apache.kafka.clients.producer.internals.DefaultPartitioner",
+          "Record Writer": null,
+          "Transactions Enabled": "true",
+          "Message Key Field": null,
+          "FlowFile Attribute Header Pattern": null
+        },
+        "propertyDescriptors": {
+          "compression.type": {
+            "name": "compression.type",
+            "displayName": "Compression Type",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "acks": {
+            "name": "acks",
+            "displayName": "Delivery Guarantee",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Message Demarcator": {
+            "name": "Message Demarcator",
+            "displayName": "Message Demarcator",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Kafka Key Attribute Encoding": {
+            "name": "Kafka Key Attribute Encoding",
+            "displayName": "Kafka Key Attribute Encoding",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Record Reader": {
+            "name": "Record Reader",
+            "displayName": "Record Reader",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Record Metadata Strategy": {
+            "name": "Record Metadata Strategy",
+            "displayName": "Record Metadata Strategy",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Transactional ID Prefix": {
+            "name": "Transactional ID Prefix",
+            "displayName": "Transactional ID Prefix",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Header Encoding": {
+            "name": "Header Encoding",
+            "displayName": "Header Encoding",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "max.request.size": {
+            "name": "max.request.size",
+            "displayName": "Max Request Size",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Topic Name": {
+            "name": "Topic Name",
+            "displayName": "Topic Name",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Kafka Key": {
+            "name": "Kafka Key",
+            "displayName": "Kafka Key",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "partition": {
+            "name": "partition",
+            "displayName": "Partition",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Kafka Connection Service": {
+            "name": "Kafka Connection Service",
+            "displayName": "Kafka Connection Service",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Publish Strategy": {
+            "name": "Publish Strategy",
+            "displayName": "Publish Strategy",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Record Key Writer": {
+            "name": "Record Key Writer",
+            "displayName": "Record Key Writer",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Failure Strategy": {
+            "name": "Failure Strategy",
+            "displayName": "Failure Strategy",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "partitioner.class": {
+            "name": "partitioner.class",
+            "displayName": "Partitioner Class",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Record Writer": {
+            "name": "Record Writer",
+            "displayName": "Record Writer",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Transactions Enabled": {
+            "name": "Transactions Enabled",
+            "displayName": "Transactions Enabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Message Key Field": {
+            "name": "Message Key Field",
+            "displayName": "Message Key Field",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "FlowFile Attribute Header Pattern": {
+            "name": "FlowFile Attribute Header Pattern",
+            "displayName": "FlowFile Attribute Header Pattern",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          }
+        },
+        "style": {},
+        "schedulingPeriod": "0 sec",
+        "schedulingStrategy": "TIMER_DRIVEN",
+        "executionNode": "ALL",
+        "penaltyDuration": "30 sec",
+        "yieldDuration": "1 sec",
+        "bulletinLevel": "WARN",
+        "runDurationMillis": 0,
+        "concurrentlySchedulableTaskCount": 1,
+        "autoTerminatedRelationships": [
+          "success"
+        ],
+        "scheduledState": "ENABLED",
+        "retryCount": 10,
+        "retriedRelationships": [],
+        "backoffMechanism": "PENALIZE_FLOWFILE",
+        "maxBackoffPeriod": "10 mins",
+        "componentType": "PROCESSOR",
+        "groupIdentifier": "96c40c82-b631-5e4c-b856-a0807425acbc"
+      }
+    ],
+    "inputPorts": [],
+    "outputPorts": [],
+    "connections": [
+      {
+        "identifier": "02b8ac8f-e16f-5e7e-bd46-43724423f161",
+        "instanceIdentifier": "df7b1c47-51f3-55c3-b1b8-3db42fec7a28",
+        "name": "",
+        "source": {
+          "id": "9ec66b9a-2be7-50a6-b6b8-777721734648",
+          "type": "PROCESSOR",
+          "groupId": "96c40c82-b631-5e4c-b856-a0807425acbc",
+          "name": "Transform OpenSky to Horus events",
+          "comments": "",
+          "instanceIdentifier": "9d32754e-2b0a-5e1d-aff0-e5cab7689b99"
+        },
+        "destination": {
+          "id": "534902eb-6a29-5a6e-8bd7-d4b4c31c554d",
+          "type": "PROCESSOR",
+          "groupId": "96c40c82-b631-5e4c-b856-a0807425acbc",
+          "name": "PublishKafka",
+          "comments": "",
+          "instanceIdentifier": "c28ad929-0a83-578e-9d24-b867759dc80a"
+        },
+        "labelIndex": 0,
+        "zIndex": 4,
+        "selectedRelationships": [
+          "success"
+        ],
+        "backPressureObjectThreshold": 10000,
+        "backPressureDataSizeThreshold": "1 GB",
+        "flowFileExpiration": "0 sec",
+        "prioritizers": [],
+        "bends": [],
+        "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+        "partitioningAttribute": "",
+        "loadBalanceCompression": "DO_NOT_COMPRESS",
+        "componentType": "CONNECTION",
+        "groupIdentifier": "96c40c82-b631-5e4c-b856-a0807425acbc"
+      },
+      {
+        "identifier": "2f827f22-4ee9-5b8d-8ab1-8ea7c0f8a6bf",
+        "instanceIdentifier": "31e7d354-8e54-5781-ad1d-d95da7cf2f3a",
+        "name": "",
+        "source": {
+          "id": "534902eb-6a29-5a6e-8bd7-d4b4c31c554d",
+          "type": "PROCESSOR",
+          "groupId": "96c40c82-b631-5e4c-b856-a0807425acbc",
+          "name": "PublishKafka",
+          "comments": "",
+          "instanceIdentifier": "c28ad929-0a83-578e-9d24-b867759dc80a"
+        },
+        "destination": {
+          "id": "63f9c902-0fe8-5b9a-8be9-fbb10ced9da4",
+          "type": "FUNNEL",
+          "groupId": "96c40c82-b631-5e4c-b856-a0807425acbc",
+          "name": "Funnel",
+          "comments": "",
+          "instanceIdentifier": "3414a4ff-019f-1000-0000-000047f405e1"
+        },
+        "labelIndex": 0,
+        "zIndex": 6,
+        "selectedRelationships": [
+          "failure"
+        ],
+        "backPressureObjectThreshold": 10000,
+        "backPressureDataSizeThreshold": "1 GB",
+        "flowFileExpiration": "0 sec",
+        "prioritizers": [],
+        "bends": [],
+        "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+        "partitioningAttribute": "",
+        "loadBalanceCompression": "DO_NOT_COMPRESS",
+        "componentType": "CONNECTION",
+        "groupIdentifier": "96c40c82-b631-5e4c-b856-a0807425acbc"
+      },
+      {
+        "identifier": "0a0da927-4a05-5f58-b660-d428ff03324b",
+        "instanceIdentifier": "986bfbc1-d9bd-5246-98b0-95198a964625",
+        "name": "",
+        "source": {
+          "id": "9ec66b9a-2be7-50a6-b6b8-777721734648",
+          "type": "PROCESSOR",
+          "groupId": "96c40c82-b631-5e4c-b856-a0807425acbc",
+          "name": "Transform OpenSky to Horus events",
+          "comments": "",
+          "instanceIdentifier": "9d32754e-2b0a-5e1d-aff0-e5cab7689b99"
+        },
+        "destination": {
+          "id": "63f9c902-0fe8-5b9a-8be9-fbb10ced9da4",
+          "type": "FUNNEL",
+          "groupId": "96c40c82-b631-5e4c-b856-a0807425acbc",
+          "name": "Funnel",
+          "comments": "",
+          "instanceIdentifier": "3414a4ff-019f-1000-0000-000047f405e1"
+        },
+        "labelIndex": 0,
+        "zIndex": 5,
+        "selectedRelationships": [
+          "failure"
+        ],
+        "backPressureObjectThreshold": 10000,
+        "backPressureDataSizeThreshold": "1 GB",
+        "flowFileExpiration": "0 sec",
+        "prioritizers": [],
+        "bends": [],
+        "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+        "partitioningAttribute": "",
+        "loadBalanceCompression": "DO_NOT_COMPRESS",
+        "componentType": "CONNECTION",
+        "groupIdentifier": "96c40c82-b631-5e4c-b856-a0807425acbc"
+      },
+      {
+        "identifier": "a417018a-48d5-5ea2-8125-50e122f24646",
+        "instanceIdentifier": "37897737-66b9-5dd9-9405-9f3c852c84c7",
+        "name": "",
+        "source": {
+          "id": "0d6ed04e-ee2f-5667-b88f-2eb904e71287",
+          "type": "PROCESSOR",
+          "groupId": "96c40c82-b631-5e4c-b856-a0807425acbc",
+          "name": "Get OpenSky states",
+          "comments": "",
+          "instanceIdentifier": "3c8750b9-8378-5a3c-887e-23b42e215949"
+        },
+        "destination": {
+          "id": "9ec66b9a-2be7-50a6-b6b8-777721734648",
+          "type": "PROCESSOR",
+          "groupId": "96c40c82-b631-5e4c-b856-a0807425acbc",
+          "name": "Transform OpenSky to Horus events",
+          "comments": "",
+          "instanceIdentifier": "9d32754e-2b0a-5e1d-aff0-e5cab7689b99"
+        },
+        "labelIndex": 0,
+        "zIndex": 3,
+        "selectedRelationships": [
+          "Response"
+        ],
+        "backPressureObjectThreshold": 10000,
+        "backPressureDataSizeThreshold": "1 GB",
+        "flowFileExpiration": "0 sec",
+        "prioritizers": [],
+        "bends": [],
+        "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+        "partitioningAttribute": "",
+        "loadBalanceCompression": "DO_NOT_COMPRESS",
+        "componentType": "CONNECTION",
+        "groupIdentifier": "96c40c82-b631-5e4c-b856-a0807425acbc"
+      },
+      {
+        "identifier": "9c2d9a3b-b3b6-5a1b-96dc-2cc83d3f0668",
+        "instanceIdentifier": "4157cfa6-23a2-58f7-b83e-bd24a04c46c8",
+        "name": "",
+        "source": {
+          "id": "0d6ed04e-ee2f-5667-b88f-2eb904e71287",
+          "type": "PROCESSOR",
+          "groupId": "96c40c82-b631-5e4c-b856-a0807425acbc",
+          "name": "Get OpenSky states",
+          "comments": "",
+          "instanceIdentifier": "3c8750b9-8378-5a3c-887e-23b42e215949"
+        },
+        "destination": {
+          "id": "63f9c902-0fe8-5b9a-8be9-fbb10ced9da4",
+          "type": "FUNNEL",
+          "groupId": "96c40c82-b631-5e4c-b856-a0807425acbc",
+          "name": "Funnel",
+          "comments": "",
+          "instanceIdentifier": "3414a4ff-019f-1000-0000-000047f405e1"
+        },
+        "labelIndex": 0,
+        "zIndex": 2,
+        "selectedRelationships": [
+          "No Retry",
+          "Failure"
+        ],
+        "backPressureObjectThreshold": 10000,
+        "backPressureDataSizeThreshold": "1 GB",
+        "flowFileExpiration": "0 sec",
+        "prioritizers": [],
+        "bends": [],
+        "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+        "partitioningAttribute": "",
+        "loadBalanceCompression": "DO_NOT_COMPRESS",
+        "componentType": "CONNECTION",
+        "groupIdentifier": "96c40c82-b631-5e4c-b856-a0807425acbc"
+      },
+      {
+        "identifier": "a68c50c0-41e9-5c38-97bc-0b6a0ff80aac",
+        "instanceIdentifier": "a67f94ed-cdbe-5117-982b-071188663b64",
+        "name": "",
+        "source": {
+          "id": "58ee2f35-1f19-53eb-8a5b-effddb016d5c",
+          "type": "PROCESSOR",
+          "groupId": "96c40c82-b631-5e4c-b856-a0807425acbc",
+          "name": "Trigger OpenSky (90 sec)",
+          "comments": "",
+          "instanceIdentifier": "bcd3a32e-7efa-59c4-9e99-1b279703abc3"
+        },
+        "destination": {
+          "id": "0d6ed04e-ee2f-5667-b88f-2eb904e71287",
+          "type": "PROCESSOR",
+          "groupId": "96c40c82-b631-5e4c-b856-a0807425acbc",
+          "name": "Get OpenSky states",
+          "comments": "",
+          "instanceIdentifier": "3c8750b9-8378-5a3c-887e-23b42e215949"
+        },
+        "labelIndex": 0,
+        "zIndex": 7,
+        "selectedRelationships": [
+          "success"
+        ],
+        "backPressureObjectThreshold": 10000,
+        "backPressureDataSizeThreshold": "1 GB",
+        "flowFileExpiration": "0 sec",
+        "prioritizers": [],
+        "bends": [],
+        "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+        "partitioningAttribute": "",
+        "loadBalanceCompression": "DO_NOT_COMPRESS",
+        "componentType": "CONNECTION",
+        "groupIdentifier": "96c40c82-b631-5e4c-b856-a0807425acbc"
+      }
+    ],
+    "labels": [],
+    "funnels": [
+      {
+        "identifier": "63f9c902-0fe8-5b9a-8be9-fbb10ced9da4",
+        "instanceIdentifier": "b00ea667-338c-56ea-bad3-446cf7327df1",
+        "position": {
+          "x": -856.0,
+          "y": 80.0
+        },
+        "componentType": "FUNNEL",
+        "groupIdentifier": "96c40c82-b631-5e4c-b856-a0807425acbc"
+      }
+    ],
+    "controllerServices": [
+      {
+        "identifier": "e4fb5fba-69a2-5e7c-b4cd-8a43d12ef2c6",
+        "instanceIdentifier": "761cfcfc-1916-5a1b-b82b-9bd51b57c1f8",
+        "name": "Kafka3ConnectionService",
+        "comments": "",
+        "type": "org.apache.nifi.kafka.service.Kafka3ConnectionService",
+        "bundle": {
+          "group": "org.apache.nifi",
+          "artifact": "nifi-kafka-3-service-nar",
+          "version": "2.6.0.4.12.0.0-914"
+        },
+        "properties": {
+          "ack.wait.time": "5 sec",
+          "sasl.username": "#{kafka.sasl.username}",
+          "max.poll.records": "10000",
+          "bootstrap.servers": "#{kafka.bootstrap.servers}",
+          "sasl.kerberos.service.name": null,
+          "security.protocol": "SASL_SSL",
+          "SSL Context Service": null,
+          "sasl.mechanism": "PLAIN",
+          "isolation.level": "read_committed",
+          "oauth2-access-token-provider-service": null,
+          "max.block.ms": "5 sec",
+          "kerberos-user-service": null,
+          "default.api.timeout.ms": "60 sec",
+          "sasl.password": "#{kafka.sasl.password}"
+        },
+        "propertyDescriptors": {
+          "ack.wait.time": {
+            "name": "ack.wait.time",
+            "displayName": "Acknowledgment Wait Time",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "sasl.username": {
+            "name": "sasl.username",
+            "displayName": "SASL Username",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "max.poll.records": {
+            "name": "max.poll.records",
+            "displayName": "Max Poll Records",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "bootstrap.servers": {
+            "name": "bootstrap.servers",
+            "displayName": "Bootstrap Servers",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "sasl.kerberos.service.name": {
+            "name": "sasl.kerberos.service.name",
+            "displayName": "Kerberos Service Name",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "security.protocol": {
+            "name": "security.protocol",
+            "displayName": "Security Protocol",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "SSL Context Service": {
+            "name": "SSL Context Service",
+            "displayName": "SSL Context Service",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "sasl.mechanism": {
+            "name": "sasl.mechanism",
+            "displayName": "SASL Mechanism",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "isolation.level": {
+            "name": "isolation.level",
+            "displayName": "Transaction Isolation Level",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "oauth2-access-token-provider-service": {
+            "name": "oauth2-access-token-provider-service",
+            "displayName": "OAuth2 Access Token Provider Service",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "max.block.ms": {
+            "name": "max.block.ms",
+            "displayName": "Max Metadata Wait Time",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "kerberos-user-service": {
+            "name": "kerberos-user-service",
+            "displayName": "Kerberos User Service",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "sasl.password": {
+            "name": "sasl.password",
+            "displayName": "SASL Password",
+            "identifiesControllerService": false,
+            "sensitive": true,
+            "dynamic": false
+          },
+          "default.api.timeout.ms": {
+            "name": "default.api.timeout.ms",
+            "displayName": "Client Timeout",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          }
+        },
+        "controllerServiceApis": [
+          {
+            "type": "org.apache.nifi.kafka.service.api.KafkaConnectionService",
+            "bundle": {
+              "group": "org.apache.nifi",
+              "artifact": "nifi-kafka-service-api-nar",
+              "version": "2.6.0.4.12.0.0-914"
+            }
+          }
+        ],
+        "scheduledState": "DISABLED",
+        "bulletinLevel": "WARN",
+        "componentType": "CONTROLLER_SERVICE",
+        "groupIdentifier": "96c40c82-b631-5e4c-b856-a0807425acbc"
+      },
+      {
+        "identifier": "190eba33-6aa5-56d1-9262-385c1eff67b9",
+        "instanceIdentifier": "0f3e94aa-3760-5047-912b-d9af912f37c7",
+        "name": "OpenSky OAuth2 Token",
+        "comments": "Client credentials from the OpenSky account page (API client).",
+        "type": "org.apache.nifi.oauth2.StandardOauth2AccessTokenProvider",
+        "bundle": {
+          "group": "org.apache.nifi",
+          "artifact": "nifi-oauth2-provider-nar",
+          "version": "2.6.0.4.12.0.0-914"
+        },
+        "properties": {
+          "authorization-server-url": "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token",
+          "grant-type": "client_credentials",
+          "client-id": "#{opensky.client.id}",
+          "client-secret": "#{opensky.client.secret}"
+        },
+        "propertyDescriptors": {
+          "authorization-server-url": {
+            "name": "authorization-server-url",
+            "displayName": "Authorization Server URL",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "grant-type": {
+            "name": "grant-type",
+            "displayName": "Grant Type",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "client-id": {
+            "name": "client-id",
+            "displayName": "Client ID",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "client-secret": {
+            "name": "client-secret",
+            "displayName": "Client secret",
+            "identifiesControllerService": false,
+            "sensitive": true,
+            "dynamic": false
+          }
+        },
+        "controllerServiceApis": [
+          {
+            "type": "org.apache.nifi.oauth2.OAuth2AccessTokenProvider",
+            "bundle": {
+              "group": "org.apache.nifi",
+              "artifact": "nifi-standard-services-api-nar",
+              "version": "2.6.0.4.12.0.0-914"
+            }
+          }
+        ],
+        "scheduledState": "DISABLED",
+        "bulletinLevel": "WARN",
+        "componentType": "CONTROLLER_SERVICE",
+        "groupIdentifier": "96c40c82-b631-5e4c-b856-a0807425acbc"
+      }
+    ],
+    "defaultFlowFileExpiration": "0 sec",
+    "defaultBackPressureObjectThreshold": 10000,
+    "defaultBackPressureDataSizeThreshold": "1 GB",
+    "scheduledState": "ENABLED",
+    "executionEngine": "INHERITED",
+    "maxConcurrentTasks": 1,
+    "statelessFlowTimeout": "1 min",
+    "flowFileConcurrency": "UNBOUNDED",
+    "flowFileOutboundPolicy": "STREAM_WHEN_AVAILABLE",
+    "componentType": "PROCESS_GROUP",
+    "parameterContextName": "Horus"
+  },
+  "externalControllerServices": {},
+  "parameterContexts": {
+    "Horus": {
+      "name": "Horus",
+      "description": "Shared settings for all Horus feed flows",
+      "parameters": [
+        {
+          "name": "kafka.bootstrap.servers",
+          "description": "Comma-separated broker list, port 9093",
+          "sensitive": false,
+          "provided": false,
+          "value": ""
+        },
+        {
+          "name": "kafka.sasl.username",
+          "description": "CDP workload user name",
+          "sensitive": false,
+          "provided": false,
+          "value": ""
+        },
+        {
+          "name": "kafka.sasl.password",
+          "description": "CDP workload password",
+          "sensitive": true,
+          "provided": false
+        },
+        {
+          "name": "kafka.topic",
+          "description": "Topic all feeds publish to",
+          "sensitive": false,
+          "provided": false,
+          "value": "horus-events"
+        },
+        {
+          "name": "aisstream.api.key",
+          "description": "aisstream.io API key (vessels flow only)",
+          "sensitive": false,
+          "provided": false,
+          "value": ""
+        },
+        {
+          "name": "http.contact",
+          "description": "Contact (email or URL) sent in the User-Agent to adsb.lol and NWS",
+          "sensitive": false,
+          "provided": false,
+          "value": ""
+        },
+        {
+          "name": "opensky.client.id",
+          "description": "OpenSky API client ID (Flights OpenSky flow)",
+          "sensitive": false,
+          "provided": false,
+          "value": ""
+        },
+        {
+          "name": "opensky.client.secret",
+          "description": "OpenSky API client secret (Flights OpenSky flow)",
+          "sensitive": true,
+          "provided": false
+        }
+      ],
+      "inheritedParameterContexts": [],
+      "componentType": "PARAMETER_CONTEXT"
+    }
+  },
+  "flowEncodingVersion": "1.0",
+  "parameterProviders": {},
+  "latest": false
+}

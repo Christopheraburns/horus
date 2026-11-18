@@ -355,6 +355,10 @@ def deploy_data_plane(cfg: cfgmod.Config, rep: Report, start_flows: bool) -> int
                 "kafka.topic": (cfg.topic, False, "Topic all feeds publish to"),
                 "aisstream.api.key": (cfg.aisstream_api_key or "", False, "aisstream.io API key (vessels flow only)"),
                 "http.contact": (cfg.http_contact or "", False, "Contact sent in the User-Agent to adsb.lol and NWS"),
+                "opensky.client.id": (cfg.opensky_client_id or "", False,
+                                      "OpenSky API client ID (Flights OpenSky flow)"),
+                "opensky.client.secret": (cfg.opensky_client_secret or "", True,
+                                          "OpenSky API client secret (Flights OpenSky flow)"),
             }
             try:
                 n = nifimod.NiFi(rep.nifi_api, user, pw, verify=ca)

@@ -45,6 +45,8 @@ class Config:
     workload_password: Optional[str] = field(repr=False, default=None)
     aisstream_api_key: Optional[str] = field(repr=False, default=None)
     http_contact: Optional[str] = None
+    opensky_client_id: Optional[str] = None
+    opensky_client_secret: Optional[str] = field(repr=False, default=None)
     lake_catalog: str = "iceberg"
     problems: List[str] = field(default_factory=list)
 
@@ -111,6 +113,8 @@ def load(dotenv_path: str = ".env") -> Config:
         workload_password=_env("HORUS_WORKLOAD_PASSWORD"),
         aisstream_api_key=_env("HORUS_AISSTREAM_API_KEY"),
         http_contact=_env("HORUS_HTTP_CONTACT"),
+        opensky_client_id=_env("HORUS_OPENSKY_CLIENT_ID"),
+        opensky_client_secret=_env("HORUS_OPENSKY_CLIENT_SECRET"),
         lake_catalog=_env("LAKE_CATALOG", "iceberg"),
         problems=problems,
     )

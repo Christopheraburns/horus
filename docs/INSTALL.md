@@ -13,7 +13,7 @@ account.
 |---|---|---|
 | Kafka Data Hub | new, Streams Messaging Light Duty | `horus-dev-kafka` |
 | Flink Data Hub | new, Streaming Analytics Light Duty | `horus-dev-flink` |
-| NiFi flows (6 feeds) | existing Flow Management (NiFi 2) Data Hub | groups `HORUS-dev - …`, parameter context `Horus-dev` |
+| NiFi flows (7 flows, 5 feeds) | existing Flow Management (NiFi 2) Data Hub | groups `HORUS-dev - …`, parameter context `Horus-dev` |
 | Kafka topic | Kafka Data Hub | `horus-dev-events` |
 | Iceberg table | existing CDW Trino virtual warehouse | `iceberg.horus_dev.events_iceberg` |
 | SSB project and Flink job | Flink Data Hub | project `horus_dev`, job `horus_dev_kafka_to_iceberg` |
@@ -69,8 +69,8 @@ username or password* or HTTP 401 until the sync has run.
    [`horus.env.example`](../horus.env.example): `CDP_ACCESS_KEY_ID`,
    `CDP_PRIVATE_KEY`, `HORUS_INSTANCE`, `HORUS_ENVIRONMENT`,
    `HORUS_NIFI_DATAHUB`, `HORUS_LAKE_VW`, `HORUS_WORKLOAD_USER`,
-   `HORUS_WORKLOAD_PASSWORD`, `HORUS_AISSTREAM_API_KEY` and
-   `HORUS_HTTP_CONTACT`.
+   `HORUS_WORKLOAD_PASSWORD`, `HORUS_AISSTREAM_API_KEY`, `HORUS_HTTP_CONTACT`,
+   `HORUS_OPENSKY_CLIENT_ID` and `HORUS_OPENSKY_CLIENT_SECRET`.
 3. Start a session and open a terminal. The repo lives at `/home/cdsw/horus`.
    Run every command below from there, and give Application scripts paths
    that start with `horus/`, for example
@@ -115,9 +115,23 @@ Flink job is running.
 `create --yes` does four things here:
 
 1. Creates the `Horus-<instance>` parameter context.
-2. Imports the six feed flows.
+2. Imports the feed flows (one per `nifi/HORUS_*.json`).
 3. Enables their controller services.
 4. Starts the flows, but only if the Kafka topic step succeeded.
+
+Flights come from two flows:
+
+| Flow | Source | Rate | Notes |
+|---|---|---|---|
+| `Flights (OpenSky)` | `opensky-network.org/api/states/all`, the whole world in one call | every 90 seconds, about 3,840 of a standard account's 4,000 daily credits | Needs an OpenSky account. On the account page, create an **API client**, then set `HORUS_OPENSKY_CLIENT_ID` and `HORUS_OPENSKY_CLIENT_SECRET`. A standard account is for non-commercial use; OpenSky sells a licensed tier for commercial use. |
+| `Flights (adsb.lol)` | six 250 NM circles around major hubs | every 20 minutes | Anonymous; adsb.lol allows 500 requests a day per IP. It adds aircraft type and registration, which OpenSky's live data lacks. |
+
+Both publish to the same topic. The live map keeps the newest position per
+aircraft. The lake keeps both, tagged by `source_provider`.
+
+Re-running `create --yes` doesn't change flows that already exist in NiFi. To
+pick up a changed flow, delete its process group in NiFi first (stop it and
+empty its queues), then re-run.
 
 ## 7. Ranger policies (manual, once per instance)
 
