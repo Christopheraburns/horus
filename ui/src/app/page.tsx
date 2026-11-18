@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import { MIGRATED_FEEDS } from '@/lib/connectionMode';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Newspaper, Search, X, Globe, MapPinned, Satellite, Moon, ExternalLink, AlertTriangle, Activity, Database, Wifi, Play, Network, Crosshair } from 'lucide-react';
 import IntelFeed from '@/components/IntelFeed';
@@ -80,10 +81,10 @@ export default function Dashboard() {
   // SECURED CONNECTION: when secured, the UI must only consume migrated (NiFi)
   // feeds. connModeRef holds the authoritative server state; reloadKey forces the
   // data loaders to re-run when the mode flips.
-  const connModeRef = useRef<{ secured: boolean; migrated: string[] }>({ secured: false, migrated: ['earthquakes'] });
+  const connModeRef = useRef<{ secured: boolean; migrated: string[] }>({ secured: true, migrated: [...MIGRATED_FEEDS] });
   // Reactive mirror of connModeRef.secured so the layer loaders re-run once the
   // authoritative mode is known (a ref alone doesn't trigger the effect).
-  const [securedMode, setSecuredMode] = useState(false);
+  const [securedMode, setSecuredMode] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
 
   const [backendStatus, setBackendStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
@@ -408,8 +409,8 @@ export default function Dashboard() {
       }
     };
     const onEvent = () => apply(true);
-    // Mount: only force a reload if the server is already secured (differs from
-    // the default direct assumption), avoiding a redundant double-fetch.
+    // Mount: only force a reload if the server mode differs from the default
+    // pipeline (secured) assumption, avoiding a redundant double-fetch.
     apply(false);
     window.addEventListener('horus-connection-mode', onEvent);
     return () => window.removeEventListener('horus-connection-mode', onEvent);

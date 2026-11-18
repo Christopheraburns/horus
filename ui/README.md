@@ -21,6 +21,20 @@ The Horus map and analyst UI is a Next.js 16 app. It is derived from
 The slash rules matter. The UI appends `/resolve` to `INTEL_URL`, so a trailing
 slash there gives `//resolve` and a 404.
 
+## SOURCE toggle
+
+The **SOURCE** button in the top-right status bar chooses where the map layers
+come from:
+- **PIPELINE** (the default on every start): flights, vessels, earthquakes,
+  fires and weather come from the feeds-gateway (NiFi → Kafka → gateway). All
+  public-API layers are turned off.
+- **PUBLIC**: every layer is fetched directly from public APIs, as OSIRIS
+  originally did.
+
+It is a single server-wide setting, shared by every viewer. It only affects map
+layers. The intel resolver, region dossier and search still reach the internet.
+Time Travel always reads the lake.
+
 ## Builds
 
 The basemap style URL is compiled into the browser bundle, so the launcher

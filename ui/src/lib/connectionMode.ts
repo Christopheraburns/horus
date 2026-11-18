@@ -7,9 +7,10 @@
  * back to their direct fetch so the app stays usable. This makes the toggle a
  * live demonstration of the migration to the streaming lakehouse.
  *
- * The mode flag is a process-global singleton (single standalone node process),
- * the same pattern used by the SDK entity store. It is server-wide, like the
- * recorder toggle, and resets to OFF on restart.
+ * The mode flag is a process-global singleton (single node process), the same
+ * pattern used by the SDK entity store. It is server-wide, like the recorder
+ * toggle. Horus starts in pipeline mode (secured) on every restart; the UI
+ * toggle shows it as SOURCE: PIPELINE / PUBLIC.
  */
 
 type ConnectionModeState = { secured: boolean };
@@ -22,7 +23,7 @@ const globalForMode = globalThis as unknown as {
 
 function state(): ConnectionModeState {
   if (!globalForMode.__horusConnectionMode) {
-    globalForMode.__horusConnectionMode = { secured: false };
+    globalForMode.__horusConnectionMode = { secured: true };
   }
   return globalForMode.__horusConnectionMode;
 }

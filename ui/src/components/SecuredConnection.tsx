@@ -17,7 +17,7 @@ function broadcast(secured: boolean) {
 }
 
 export default function SecuredConnection() {
-  const [status, setStatus] = useState<ModeStatus>({ secured: false, available: false, migratedFeeds: [] });
+  const [status, setStatus] = useState<ModeStatus>({ secured: true, available: false, migratedFeeds: [] });
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -66,8 +66,8 @@ export default function SecuredConnection() {
   const labelColor = secured ? 'text-[var(--alert-green)]' : 'text-[var(--text-muted)]';
 
   const title = secured
-    ? `Secured (streaming lakehouse) — ONLY ${count} NiFi feed${count === 1 ? '' : 's'} active; all other layers disabled`
-    : 'Direct upstream mode — click to use only NiFi-backed feeds (secured)';
+    ? `Pipeline: map layers come from the Horus pipeline (NiFi -> Kafka -> gateway). Only ${count} pipeline feed${count === 1 ? '' : 's'} active; public-API layers are off. Click for public APIs.`
+    : 'Public: map layers are fetched directly from public APIs. Click to use the Horus pipeline.';
 
   return (
     <button
@@ -84,7 +84,7 @@ export default function SecuredConnection() {
       ) : (
         <ShieldOff className="w-3 h-3 text-[var(--text-muted)]" />
       )}
-      <span className={`font-bold ${labelColor}`}>SEC:{secured ? 'ON' : 'OFF'}</span>
+      <span className={`font-bold ${labelColor}`}>SOURCE: {secured ? 'PIPELINE' : 'PUBLIC'}</span>
     </button>
   );
 }
