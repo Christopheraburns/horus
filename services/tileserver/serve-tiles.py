@@ -8,9 +8,18 @@ Runs tileserver as a CHILD process and streams its output into this app's log,
 so startup errors are visible instead of hidden by an exec. The kernel stays
 alive as the supervisor; the child holds the port.
 
-Workbench rules this follows: bind 127.0.0.1 (0.0.0.0 hangs in "Starting"),
-use CDSW_APP_PORT, and run with --no-cors (the Workbench ingress adds the CORS
-headers; a second set conflicts).
+Workbench rules this follows: bind 127.0.0.1 (0.0.0.0 hangs in "Starting") and
+use CDSW_APP_PORT.
+
+CORS: the UI is a different Application (another subdomain), so the browser
+needs Access-Control-Allow-Origin on every style, tile, font and sprite
+response. tileserver-gl sends it by default, and the Workbench ingress does not
+add it (verified 2026-11-18), so --no-cors is NOT used. Set TILESERVER_NO_CORS=1
+only behind a proxy that adds its own CORS headers (two sets conflict).
+
+TILESERVER_PUBLIC_URL must be this Application's own URL with a trailing slash,
+for example https://horus-tileserver.<domain>/. The served style.json uses it
+for every glyph, sprite and tile URL, so a wrong host breaks the whole map.
 """
 import os
 import subprocess
@@ -41,10 +50,17 @@ if not os.path.exists(main_js):
     log("installing tileserver-gl-light (npm ci, first start only)")
     subprocess.run(["npm", "ci", "--omit=dev", "--no-audit", "--no-fund"], check=True)
 
-args = ["node", main_js, "--verbose", "--no-cors", "--port", port, "--bind", "127.0.0.1",
-        "-c", "config.json"]
+args = ["node", main_js, "--verbose", "--port", port, "--bind", "127.0.0.1", "-c", "config.json"]
+if os.environ.get("TILESERVER_NO_CORS") == "1":
+    args.append("--no-cors")
 if public_url:
+    if not public_url.startswith("https://") or not public_url.endswith("/"):
+        log(f"WARNING: TILESERVER_PUBLIC_URL={public_url!r} should be https://<this-app>.<domain>/ "
+            "(https, trailing slash)")
+    log(f"public URL: {public_url}  <- must be this Application's own URL")
     args += ["--public_url", public_url]
+else:
+    log("WARNING: TILESERVER_PUBLIC_URL not set; tile URLs will follow the request host")
 
 log("launching:", " ".join(args))
 proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)

@@ -189,7 +189,7 @@ Create them in this order. The UI needs the URLs of the others.
 
 | Application | Script | Runtime | Env vars | Check |
 |---|---|---|---|---|
-| Tile server | `horus/services/tileserver/serve-tiles.py` | Horus Node 22 | `TILESERVER_PUBLIC_URL=https://<tiles>.<domain>/` (trailing slash) | `/styles/dark/style.json` loads |
+| Tile server | `horus/services/tileserver/serve-tiles.py` | Horus Node 22 | `TILESERVER_PUBLIC_URL=https://<tiles>.<domain>/`: this Application's **own** URL, with a trailing slash. A wrong host breaks every glyph, sprite and tile URL in the style. | `/styles/dark/style.json` loads, and every URL in it starts with the tile server's own host |
 | Feeds-gateway | `horus/services/feeds-gateway/gateway_startup.py` | PBJ Workbench Python 3.12 | the "Feeds-Gateway variables" that `status` prints, copied exactly; `INTEL_URL=https://<intel>.<domain>` (no slash); the LLM variables below | `/health` lists all five feeds and `kafka.messages` climbs |
 | Intel resolver | `horus/services/intel/launch_intel_resolver.py` | Horus Node 22 | `MEMGRAPH_URL=https://<graph>.<domain>/cypher` (optional) | `/health` shows about 20,000 `sanctions_entries` |
 | Memgraph | `horus/services/memgraph/app.py` | Horus Memgraph | none | `MATCH (n) RETURN count(n)` returns 949256 |
@@ -256,3 +256,5 @@ SSB keytab and the Flink job. To do that, re-run `create --yes`.
 | SSB `Kerberos keytab needs to be unlocked` | Re-run `create --yes`, which unlocks the keytab. |
 | SSB `Failed to open input stream for file: s3a://…` | The Ranger S3 policy is missing, doesn't list `ssb`, or has a path without the leading `/` (step 7). Ranger → **Audits** shows the denied user and path. |
 | `status` shows the `lake table` row as WARN with 0 rows | Normal until the Flink job has completed its first checkpoint. |
+| Map is blank in both SOURCE modes; browser console shows *blocked by CORS policy* for `style.json` | The tile server is running with `--no-cors`. The current launcher sends CORS headers by default; restart the tile server after `git pull`. |
+| Map is blank; `style.json` loads but glyph, sprite or tile requests go to a different host | The tile server's `TILESERVER_PUBLIC_URL` isn't its own URL. Fix it on the tile server Application and restart. |
