@@ -174,7 +174,39 @@ python provision/horus.py status
 
 Every row should be OK. `lake table` should show a growing row count.
 
-## 9. Clean up credentials
+## 9. Workbench Applications
+
+Each part of Horus that people use runs as a Workbench Application in the
+project. For every Application, set these:
+
+- **Unauthenticated Access: on.** The UI's server-side proxy calls the other
+  Applications without an Authorization header.
+- **Script paths start with `horus/`,** because the repo is at `/home/cdsw/horus`.
+- **Env vars are inherited from the project,** so the workload credentials don't
+  need to be set again.
+
+Create them in this order. The UI needs the URLs of the others.
+
+| Application | Script | Runtime | Env vars | Check |
+|---|---|---|---|---|
+| Tile server | `horus/services/tileserver/serve-tiles.py` | Horus Node 22 | `TILESERVER_PUBLIC_URL=https://<tiles>.<domain>/` (trailing slash) | `/styles/dark/style.json` loads |
+| Feeds-gateway | `horus/services/feeds-gateway/gateway_startup.py` | PBJ Workbench Python 3.12 | the "Feeds-Gateway variables" that `status` prints, copied exactly; `INTEL_URL=https://<intel>.<domain>` (no slash) | `/health` lists all five feeds and `kafka.messages` climbs |
+| Intel resolver | `horus/services/intel/launch_intel_resolver.py` | Horus Node 22 | `MEMGRAPH_URL=https://<graph>.<domain>/cypher` (optional) | `/health` shows about 20,000 `sanctions_entries` |
+| Memgraph | `horus/services/memgraph/app.py` | Horus Memgraph | none | `MATCH (n) RETURN count(n)` returns 949256 |
+
+Some Applications need files that are too large for git. Upload these to the
+project before starting them:
+
+- **Tile server:** `horus-basemap.mbtiles` (214 MB) goes into
+  `horus/services/tileserver/`.
+- **Memgraph:** extract the graph snapshot archive into `/home/cdsw/memgraph-data`
+  before the first start. See [services/memgraph/README.md](../services/memgraph/README.md).
+
+Run `python provision/horus.py status` in a session before starting the
+gateway. It writes `/home/cdsw/horus/horus-ca.pem`, the environment certificate
+the gateway needs to trust the Kafka brokers.
+
+## 10. Clean up credentials
 
 Once provisioning is done, delete `CDP_ACCESS_KEY_ID` and `CDP_PRIVATE_KEY`
 from the Workbench project. The running system needs only the workload user
