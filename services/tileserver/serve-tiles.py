@@ -24,7 +24,8 @@ def log(*a):
 try:
     here = os.path.dirname(os.path.abspath(__file__))
 except NameError:  # Workbench runs the script inside a Jupyter kernel
-    here = os.path.join(os.environ.get("HOME", "/home/cdsw"), "services", "tileserver")
+    # Workbench project root is /home/cdsw; the repo is cloned at /home/cdsw/horus.
+    here = os.path.join(os.environ.get("HOME", "/home/cdsw"), "horus", "services", "tileserver")
 os.chdir(here)
 
 port = os.environ.get("CDSW_APP_PORT", "8090")
@@ -33,7 +34,7 @@ public_url = os.environ.get("TILESERVER_PUBLIC_URL", "")
 # The basemap is too large for git (214 MB); it is uploaded into this directory.
 if not os.path.exists("horus-basemap.mbtiles"):
     raise SystemExit(f"horus-basemap.mbtiles not found in {here} -- upload it there "
-                     "(Workbench project Files -> services/tileserver/)")
+                     "(Workbench project Files -> horus/services/tileserver/)")
 
 main_js = os.path.join(here, "node_modules", "tileserver-gl-light", "src", "main.js")
 if not os.path.exists(main_js):

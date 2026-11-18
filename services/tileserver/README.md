@@ -7,7 +7,7 @@ third-party map provider at runtime.
 
 | | |
 |---|---|
-| Workbench Application script | `services/tileserver/serve-tiles.py` |
+| Workbench Application script | `horus/services/tileserver/serve-tiles.py` (repo cloned at `/home/cdsw/horus`) |
 | Runtime | Horus Node 22 (`horus-node-runtime`) |
 | Env var | `TILESERVER_PUBLIC_URL=https://<subdomain>.<workbench-domain>/` (keep the trailing slash) |
 | Basemap | `horus-basemap.mbtiles`: planet, zoom 0–7, OpenMapTiles 3.16, about 214 MB |
@@ -16,7 +16,7 @@ third-party map provider at runtime.
 
 `horus-basemap.mbtiles` is too large for git and is ignored by `*.mbtiles`.
 Upload it into this directory in the Workbench project, under **Files →
-services/tileserver/**, before starting the Application. The launcher stops
+horus/services/tileserver/**, before starting the Application. The launcher stops
 with a clear message if the file is missing.
 
 ## What's in git
