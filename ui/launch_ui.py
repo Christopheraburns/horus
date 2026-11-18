@@ -7,7 +7,8 @@ standalone breaks static chunk serving (ChunkLoadError).
 
 The basemap style URL is compiled into the browser bundle at build time, so this
 launcher builds the app itself:
-  - `npm ci` on first start (about 1-2 minutes)
+  - `npm ci` on first start, and again whenever package-lock.json changes
+    (about 1-2 minutes)
   - `npm run build` on first start, and again whenever the style URL or the
     ui/ code (its last git commit) changes (about 3-5 minutes)
 Later starts reuse the build and come up in seconds.
@@ -19,6 +20,7 @@ Application env vars:
     NEXT_PUBLIC_BASEMAP_STYLE_URL  optional; overrides the derived style URL
     HORUS_UI_REBUILD=1     optional; force a rebuild on this start
 """
+import hashlib
 import json
 import os
 import subprocess
@@ -55,9 +57,22 @@ build_env = {**os.environ,
              "NEXT_PUBLIC_TILE_CACHE_URL": "disabled",
              "NEXT_TELEMETRY_DISABLED": "1"}
 
-if not os.path.isdir("node_modules"):
-    log("installing dependencies (npm ci, first start only)")
+# Reinstall when node_modules is missing or package-lock.json has changed since
+# the last install (for example after a git pull that adds a dependency).
+lock_path = "package-lock.json"
+lock_stamp = os.path.join("node_modules", ".horus-lock.sha256")
+with open(lock_path, "rb") as f:
+    lock_hash = hashlib.sha256(f.read()).hexdigest()
+try:
+    with open(lock_stamp) as f:
+        installed_hash = f.read().strip()
+except OSError:
+    installed_hash = None
+if not os.path.isdir("node_modules") or installed_hash != lock_hash:
+    log("installing dependencies (npm ci); package-lock.json is new or changed")
     subprocess.run(["npm", "ci", "--no-audit", "--no-fund"], check=True, env=build_env)
+    with open(lock_stamp, "w") as f:
+        f.write(lock_hash)
 
 stamp_path = os.path.join(".next", "horus-build.json")
 try:  # last commit touching ui/, so a git pull that changes the UI rebuilds it
