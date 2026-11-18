@@ -12,7 +12,8 @@ needs launching — one uvicorn server, one worker, coherent in-memory snapshot.
 
 Application env vars -- `python provision/horus.py status` prints the values:
     KAFKA_BROKERS         broker list, port 9093          (live mode)
-    KAFKA_USER / KAFKA_PASSWORD   workload user + password
+    KAFKA_USER / KAFKA_PASSWORD   default to the project's HORUS_WORKLOAD_USER /
+                          HORUS_WORKLOAD_PASSWORD
     KAFKA_TOPIC           horus-<instance>-events
     KAFKA_GROUP_ID        horus-<instance>-feeds-gateway
     KAFKA_CA_FILE         /home/cdsw/horus/horus-ca.pem (written by `status`;
@@ -20,8 +21,8 @@ Application env vars -- `python provision/horus.py status` prints the values:
                           environment's FreeIPA CA)
     LAKE_ENGINE / LAKE_CATALOG    trino / iceberg
     HIVE_HOST / HIVE_PORT / HIVE_USE_SSL / HIVE_DATABASE / HIVE_TABLE
-    HIVE_USER / HIVE_PASSWORD     workload user + password (TimeTravel and
-                          lakehouse mode read the lake through Trino)
+    HIVE_USER / HIVE_PASSWORD     same defaults (TimeTravel and lakehouse mode
+                          read the lake through Trino)
     GATEWAY_SOURCE_MODE   live (default) | lakehouse
 Optional:
     FEEDS_GATEWAY_DIR     path to services/feeds-gateway (default below)
@@ -48,6 +49,13 @@ if not os.path.isdir(GATEWAY_DIR):
     )
 os.chdir(GATEWAY_DIR)
 sys.path.insert(0, GATEWAY_DIR)
+
+# Applications inherit the project's variables: reuse the workload credentials
+# the provisioner already uses, so the password lives in one place.
+for _var in ("KAFKA_USER", "HIVE_USER"):
+    os.environ.setdefault(_var, os.environ.get("HORUS_WORKLOAD_USER", ""))
+for _var in ("KAFKA_PASSWORD", "HIVE_PASSWORD"):
+    os.environ.setdefault(_var, os.environ.get("HORUS_WORKLOAD_PASSWORD", ""))
 
 # ── 2) Install dependencies on cold start (skipped if already importable) ──
 _REQUIRED = ("fastapi", "uvicorn", "aiokafka", "psycopg", "neo4j", "httpx", "impala", "trino")

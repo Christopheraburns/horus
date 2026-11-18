@@ -475,7 +475,7 @@ def _print(rep: Report) -> None:
         print("\nFeeds-Gateway variables (passwords not shown):")
         for k, v in rep.gateway_env.items():
             print(f"  {k}={v}")
-        print("  KAFKA_PASSWORD / HIVE_PASSWORD = the workload password (set them yourself)")
+        print("  (KAFKA_/HIVE_ USER and PASSWORD default to the project's HORUS_WORKLOAD_* variables)")
 
 
 def main(argv: Optional[List[str]] = None) -> int:
