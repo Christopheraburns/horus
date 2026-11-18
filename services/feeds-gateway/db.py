@@ -5,6 +5,9 @@ table (same table the Horus server writes to; the ``service`` column
 distinguishes them). Writes are non-blocking: ``log_row`` enqueues, and a
 background thread batch-inserts. If Postgres is unavailable the rows are dropped
 to stdout so logging never blocks the consumer.
+
+The Postgres sink is opt-in: it runs only when LOGS_PG_HOST is set. On Workbench there is no logs database, so rows go
+straight to stdout and startup does not wait on connection retries.
 """
 from __future__ import annotations
 
@@ -21,8 +24,9 @@ import psycopg
 
 log = logging.getLogger("feeds-gateway.db")
 
+ENABLED = bool(os.environ.get("LOGS_PG_HOST"))
 PG = {
-    "host": os.environ.get("LOGS_PG_HOST", "horus-metastore-db"),
+    "host": os.environ.get("LOGS_PG_HOST", ""),
     "port": int(os.environ.get("LOGS_PG_PORT", "5432")),
     "user": os.environ.get("LOGS_PG_USER", "hive"),
     "password": os.environ.get("LOGS_PG_PASSWORD", "hive"),
@@ -113,6 +117,10 @@ def start() -> None:
     with _lock:
         if _started:
             return
+        if not ENABLED:
+            _started = True
+            log.info("logs db disabled (LOGS_PG_HOST unset); structured log rows go to stdout")
+            return
         for attempt in range(10):
             try:
                 _bootstrap()
@@ -136,6 +144,9 @@ def log_row(level: str, scope: str, msg: str, *, ingest_run_id: str | None = Non
         "ingest_run_id": ingest_run_id,
         "data": data,
     }
+    if not ENABLED:
+        print(f"[gateway] {rec['ts']} {level} {scope} {msg} {data or ''}".rstrip(), flush=True)
+        return
     try:
         _q.put_nowait(rec)
     except queue.Full:

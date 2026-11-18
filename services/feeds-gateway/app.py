@@ -88,6 +88,12 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+@app.get("/")
+async def root() -> JSONResponse:
+    """Workbench's readiness probe requests the root; without a 200 the app hangs in Starting."""
+    return JSONResponse({"service": "horus-feeds-gateway", "health": "/health"})
+
+
 @app.get("/health")
 async def health() -> JSONResponse:
     store: FeedStore = app.state.store

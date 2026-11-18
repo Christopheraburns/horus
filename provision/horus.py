@@ -33,6 +33,7 @@ import config as cfgmod  # noqa: E402
 from cdp import CdpError, cdp  # noqa: E402
 
 OK, WARN, FAIL, TODO = "ok", "warn", "fail", "todo"
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class Report:
@@ -227,6 +228,17 @@ def status(cfg: cfgmod.Config) -> Report:
             rep.add("workbench", WARN, f"HORUS_WORKBENCH not set; available: {', '.join(names) or 'none'}")
     except CdpError as e:
         rep.add("workbench", WARN, f"could not list workbenches: {e}")
+
+    # The brokers' TLS certificates are signed by the environment's FreeIPA CA;
+    # the gateway trusts it through KAFKA_CA_FILE. Public data, gitignored (*.pem).
+    try:
+        root = cdp("environments", "get-root-certificate", "--environment-name", cfg.environment)["contents"]
+        ca_path = os.path.join(REPO_ROOT, "horus-ca.pem")
+        with open(ca_path, "w") as fh:
+            fh.write(root.strip() + "\n")
+        rep.gateway_env["KAFKA_CA_FILE"] = ca_path
+    except (CdpError, OSError) as e:
+        rep.add("environment ca", WARN, f"could not save the environment root certificate: {e}")
 
     rep.gateway_env.update({
         "KAFKA_TOPIC": cfg.topic,
@@ -463,6 +475,7 @@ def _print(rep: Report) -> None:
         print("\nFeeds-Gateway variables (passwords not shown):")
         for k, v in rep.gateway_env.items():
             print(f"  {k}={v}")
+        print("  KAFKA_PASSWORD / HIVE_PASSWORD = the workload password (set them yourself)")
 
 
 def main(argv: Optional[List[str]] = None) -> int:
