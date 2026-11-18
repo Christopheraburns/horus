@@ -193,6 +193,14 @@ Create them in this order. The UI needs the URLs of the others.
 | Feeds-gateway | `horus/services/feeds-gateway/gateway_startup.py` | PBJ Workbench Python 3.12 | the "Feeds-Gateway variables" that `status` prints, copied exactly; `INTEL_URL=https://<intel>.<domain>` (no slash) | `/health` lists all five feeds and `kafka.messages` climbs |
 | Intel resolver | `horus/services/intel/launch_intel_resolver.py` | Horus Node 22 | `MEMGRAPH_URL=https://<graph>.<domain>/cypher` (optional) | `/health` shows about 20,000 `sanctions_entries` |
 | Memgraph | `horus/services/memgraph/app.py` | Horus Memgraph | none | `MATCH (n) RETURN count(n)` returns 949256 |
+| UI | `horus/ui/launch_ui.py` | Horus Node 22 | `FEEDS_GATEWAY_URL=https://<gateway>.<domain>` (no slash), `INTEL_URL=https://<intel>.<domain>` (no slash), `TILESERVER_PUBLIC_URL=https://<tiles>.<domain>/` (trailing slash) | the map loads with the dark basemap |
+
+The UI builds itself on first start: `npm ci`, then `next build`. This takes
+about 5 minutes, and the Application shows *Starting* until it finishes. The
+basemap URL is compiled into the build. The next start rebuilds the UI if
+`TILESERVER_PUBLIC_URL` has changed, or if a `git pull` has brought in changes
+to `ui/`. Set `HORUS_UI_REBUILD=1` to force a rebuild. Give the UI a profile
+with at least 4 GiB, because `next build` uses a lot of memory.
 
 Some Applications need files that are too large for git. Upload these to the
 project before starting them:
