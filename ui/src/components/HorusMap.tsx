@@ -153,7 +153,9 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: styleUrl,
-      center: [25.48, 42.70], zoom: 6.5, minZoom: 1.5, maxZoom: 18,
+      // Open on the whole globe. (Upstream OSIRIS opened zoomed in on Bulgaria and
+      // relied on an IP fly-to, which Horus disables.)
+      center: [10, 25], zoom: 1.8, minZoom: 1.5, maxZoom: 18,
       attributionControl: false,
       maxPitch: 85,
       transformRequest: (url: string) => transformBasemapRequest(url),
@@ -236,7 +238,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         'icon-allow-overlap': true,
         'text-field': ['get','label'],
         'text-size': ['interpolate',['linear'],['zoom'], 1,7, 4,9, 8,11],
-        'text-font': ['Open Sans Bold'],
+        'text-font': ['Noto Sans Regular'],
         'text-offset': [0, 1.4],
         'text-allow-overlap': false,
       }, paint: {
@@ -255,7 +257,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         'circle-opacity': 0.55, 'circle-blur': 0.3, 'circle-stroke-width': 1, 'circle-stroke-color': '#F9A825', 'circle-stroke-opacity': 0.25,
       }});
       map.addLayer({ id: 'eq-label', type: 'symbol', source: 'earthquakes', filter: ['>=',['get','magnitude'],4.5], layout: {
-        'text-field': ['concat','M',['to-string',['get','magnitude']]], 'text-size': 9, 'text-font': ['Open Sans Regular'], 'text-offset': [0,1.5],
+        'text-field': ['concat','M',['to-string',['get','magnitude']]], 'text-size': 9, 'text-font': ['Noto Sans Regular'], 'text-offset': [0,1.5],
       }, paint: { 'text-color': '#F9A825', 'text-halo-color': '#000', 'text-halo-width': 1 }});
 
       // Fires — burnt sienna
@@ -277,7 +279,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
       }});
       // CCTV — labels at zoom 10+
       map.addLayer({ id: 'cctv-label', type: 'symbol', source: 'cctv', minzoom: 10, layout: {
-        'text-field': ['get','name'], 'text-size': 9, 'text-font': ['Open Sans Regular'],
+        'text-field': ['get','name'], 'text-size': 9, 'text-font': ['Noto Sans Regular'],
         'text-offset': [0, 1.8], 'text-max-width': 12, 'text-allow-overlap': false,
       }, paint: { 'text-color': cameraColor, 'text-halo-color': '#000000', 'text-halo-width': 1.5, 'text-opacity': 0.8 }});
 
@@ -297,7 +299,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         'circle-stroke-width': 1, 'circle-stroke-color': '#000000', 'circle-stroke-opacity': 0.8,
       }});
       map.addLayer({ id: 'malware-label', type: 'symbol', source: 'malware-nodes', minzoom: 5, layout: {
-        'text-field': ['get','malware'], 'text-size': 8, 'text-font': ['JetBrains Mono Bold', 'Open Sans Bold'],
+        'text-field': ['get','malware'], 'text-size': 8, 'text-font': ['JetBrains Mono Bold', 'Noto Sans Regular'],
         'text-offset': [0, 1.5], 'text-max-width': 10, 'text-allow-overlap': false,
       }, paint: { 'text-color': '#D32F2F', 'text-halo-color': '#111', 'text-halo-width': 1.5, 'text-opacity': 0.85 }});
 
@@ -328,7 +330,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
       // GPS Jamming — crimson
       map.addLayer({ id: 'jam-fill', type: 'circle', source: 'gps-jamming', paint: { 'circle-radius': 30, 'circle-color': '#D32F2F', 'circle-opacity': 0.12, 'circle-blur': 1 }});
       map.addLayer({ id: 'jam-label', type: 'symbol', source: 'gps-jamming', layout: {
-        'text-field': ['concat','GPS JAM ',['to-string',['get','severity']],'%'], 'text-size': 10, 'text-font': ['Open Sans Bold'], 'text-allow-overlap': true,
+        'text-field': ['concat','GPS JAM ',['to-string',['get','severity']],'%'], 'text-size': 10, 'text-font': ['Noto Sans Regular'], 'text-allow-overlap': true,
       }, paint: { 'text-color': '#D32F2F', 'text-halo-color': '#000', 'text-halo-width': 1 }});
 
       // Weather Events (NASA EONET) — deep violet
@@ -343,7 +345,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         'circle-stroke-width': 1.5, 'circle-stroke-color': '#7E57C2', 'circle-stroke-opacity': 0.35,
       }});
       map.addLayer({ id: 'weather-label', type: 'symbol', source: 'weather', layout: {
-        'text-field': ['get','title'], 'text-size': 9, 'text-font': ['Open Sans Regular'],
+        'text-field': ['get','title'], 'text-size': 9, 'text-font': ['Noto Sans Regular'],
         'text-offset': [0, 2], 'text-max-width': 14, 'text-allow-overlap': false,
       }, paint: { 'text-color': '#7E57C2', 'text-halo-color': '#000', 'text-halo-width': 1, 'text-opacity': 0.8 }});
 
@@ -365,7 +367,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         'circle-stroke-width': 1.5, 'circle-stroke-color': ['case', ['in', 'SEISMIC RISK', ['get', 'status']], '#E65100', '#26A69A'], 'circle-stroke-opacity': 0.35,
       }});
       map.addLayer({ id: 'infra-label', type: 'symbol', source: 'infrastructure', minzoom: 5, layout: {
-        'text-field': ['get','name'], 'text-size': 9, 'text-font': ['Open Sans Regular'],
+        'text-field': ['get','name'], 'text-size': 9, 'text-font': ['Noto Sans Regular'],
         'text-offset': [0, 2], 'text-max-width': 14, 'text-allow-overlap': false,
       }, paint: { 'text-color': ['case', ['in', 'SEISMIC RISK', ['get', 'status']], '#E65100', '#26A69A'], 'text-halo-color': '#000', 'text-halo-width': 1, 'text-opacity': 0.7 }});
 
@@ -390,7 +392,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         'circle-stroke-width': 1.5, 'circle-stroke-color': ['match', ['get','type'], 'naval','#D32F2F', 'energy','#E65100', '#26C6DA'], 'circle-stroke-opacity': 0.35,
       }});
       map.addLayer({ id: 'maritime-label', type: 'symbol', source: 'maritime', minzoom: 4, layout: {
-        'text-field': ['get','name'], 'text-size': 9, 'text-font': ['Open Sans Regular'],
+        'text-field': ['get','name'], 'text-size': 9, 'text-font': ['Noto Sans Regular'],
         'text-offset': [0, 1.8], 'text-max-width': 12, 'text-allow-overlap': false,
       }, paint: { 'text-color': '#26C6DA', 'text-halo-color': '#000', 'text-halo-width': 1, 'text-opacity': 0.7 }});
 
@@ -406,7 +408,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         'circle-stroke-width': 1.5, 'circle-stroke-color': '#E65100', 'circle-stroke-opacity': 0.4,
       }});
       map.addLayer({ id: 'choke-label', type: 'symbol', source: 'maritime-choke', minzoom: 3, layout: {
-        'text-field': ['get','name'], 'text-size': 10, 'text-font': ['Open Sans Bold'],
+        'text-field': ['get','name'], 'text-size': 10, 'text-font': ['Noto Sans Regular'],
         'text-offset': [0, 2], 'text-max-width': 14, 'text-allow-overlap': false,
       }, paint: { 'text-color': '#E65100', 'text-halo-color': '#000', 'text-halo-width': 1, 'text-opacity': 0.9 }});
 
@@ -421,7 +423,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         'circle-stroke-width': 1.5, 'circle-stroke-color': '#EC407A', 'circle-stroke-opacity': 0.4,
       }});
       map.addLayer({ id: 'news-label', type: 'symbol', source: 'live-news', minzoom: 4, layout: {
-        'text-field': ['get','name'], 'text-size': 9, 'text-font': ['Open Sans Regular'],
+        'text-field': ['get','name'], 'text-size': 9, 'text-font': ['Noto Sans Regular'],
         'text-offset': [0, 1.8], 'text-max-width': 12, 'text-allow-overlap': false,
       }, paint: { 'text-color': '#EC407A', 'text-halo-color': '#000', 'text-halo-width': 1, 'text-opacity': 0.8 }});
 
@@ -436,7 +438,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         'circle-stroke-width': 1.5, 'circle-stroke-color': '#FFF8DC', 'circle-stroke-opacity': 0.6,
       }});
       map.addLayer({ id: 'sigint-news-label', type: 'symbol', source: 'sigint-news', minzoom: 5, layout: {
-        'text-field': ['get','source'], 'text-size': 9, 'text-font': ['Open Sans Regular'],
+        'text-field': ['get','source'], 'text-size': 9, 'text-font': ['Noto Sans Regular'],
         'text-offset': [0, 1.6], 'text-max-width': 10, 'text-allow-overlap': false,
       }, paint: { 'text-color': '#D4AF37', 'text-halo-color': '#000', 'text-halo-width': 1, 'text-opacity': 0.85 }});
 
@@ -467,7 +469,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         'circle-stroke-width': 1, 'circle-stroke-color': '#fff', 'circle-stroke-opacity': 0.5,
       }});
       map.addLayer({ id: 'balloon-label', type: 'symbol', source: 'balloons', minzoom: 4, layout: {
-        'text-field': ['get','callsign'], 'text-size': 9, 'text-font': ['Open Sans Regular'],
+        'text-field': ['get','callsign'], 'text-size': 9, 'text-font': ['Noto Sans Regular'],
         'text-offset': [0, 1.2], 'text-max-width': 12, 'text-allow-overlap': false,
       }, paint: { 'text-color': ['get', 'color'], 'text-halo-color': '#000', 'text-halo-width': 1 }});
 
@@ -484,7 +486,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         'circle-stroke-width': 1.5, 'circle-stroke-color': ['match', ['get','status'], 'DANGER','#D32F2F', 'WARNING','#E65100', '#7E57C2'], 'circle-stroke-opacity': 0.35,
       }});
       map.addLayer({ id: 'rad-label', type: 'symbol', source: 'radiation', minzoom: 5, layout: {
-        'text-field': ['concat', ['to-string', ['get','reading']], ' nSv/h'], 'text-size': 9, 'text-font': ['Open Sans Bold'],
+        'text-field': ['concat', ['to-string', ['get','reading']], ' nSv/h'], 'text-size': 9, 'text-font': ['Noto Sans Regular'],
         'text-offset': [0, 1.5], 'text-allow-overlap': false,
       }, paint: { 'text-color': ['match', ['get','status'], 'DANGER','#D32F2F', 'WARNING','#E65100', '#7E57C2'], 'text-halo-color': '#000', 'text-halo-width': 1 }});
 
@@ -558,7 +560,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         'icon-allow-overlap': true,
       }});
       map.addLayer({ id: 'tt-label', type: 'symbol', source: 'timetravel', minzoom: 5, layout: {
-        'text-field': ['get','label'], 'text-size': 9, 'text-font': ['Open Sans Regular'],
+        'text-field': ['get','label'], 'text-size': 9, 'text-font': ['Noto Sans Regular'],
         'text-offset': [0, 1.2], 'text-allow-overlap': false,
       }, paint: { 'text-color': '#FFCA28', 'text-halo-color': '#000', 'text-halo-width': 1 }});
 
@@ -576,7 +578,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         'circle-opacity': 0.75,
       }});
       map.addLayer({ id: 'ship-label', type: 'symbol', source: 'maritime-ships', minzoom: 5, layout: {
-        'text-field': ['get','name'], 'text-size': 9, 'text-font': ['Open Sans Regular'],
+        'text-field': ['get','name'], 'text-size': 9, 'text-font': ['Noto Sans Regular'],
         'text-offset': [0, 1.2], 'text-allow-overlap': false,
       }, paint: { 'text-color': ['case',
           ['==', ['get','type'], 'military'], '#D32F2F',
