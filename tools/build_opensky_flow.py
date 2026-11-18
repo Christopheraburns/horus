@@ -29,7 +29,12 @@ OPENSKY_URL = "https://opensky-network.org/api/states/all?extended=1"
 TOKEN_URL = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
 POLL = "90 sec"   # 4 credits per global call: 960 calls/day = 3,840 of a standard account's 4,000
 
-ADSB_POLL = "20 min"
+# adsb.lol allows 500 requests per UTC day (window resets 00:00 UTC). Spend it in
+# working hours only: every 12 min, 13:00-03:48 UTC (7:00 AM-9:48 PM US Central
+# standard time) = 15 h x 5 cycles x 6 points = 450 requests. Quartz syntax;
+# NiFi evaluates it in the server's time zone (UTC on Data Hub nodes).
+ADSB_CRON = "0 0/12 0-3,13-23 * * ?"
+ADSB_LABEL = "7AM-10PM CT, every 12 min"
 
 
 def sid(name: str) -> str:
@@ -186,21 +191,24 @@ def build() -> dict:
 
 
 def slow_adsb() -> None:
-    """Keep the adsb.lol flow under 500 requests/day (6 points every 20 min = 432)."""
+    """Keep the adsb.lol flow under 500 requests per UTC day (see ADSB_CRON)."""
     flow = json.load(open(SRC))
+    name = f"Generate Coordinates for ADSB.lol ({ADSB_LABEL})"
     changed = False
     for p in flow["flowContents"]["processors"]:
-        if p["type"].endswith("GenerateFlowFile") and p["schedulingPeriod"] != ADSB_POLL:
-            p["schedulingPeriod"] = ADSB_POLL
-            p["name"] = f"Generate Coordinates for ADSB.lol ({ADSB_POLL})"
+        if p["type"].endswith("GenerateFlowFile") and (
+                p["schedulingStrategy"] != "CRON_DRIVEN" or p["schedulingPeriod"] != ADSB_CRON):
+            p["schedulingStrategy"] = "CRON_DRIVEN"
+            p["schedulingPeriod"] = ADSB_CRON
+            p["name"] = name
             changed = True
     for c in flow["flowContents"]["connections"]:
         for end in ("source", "destination"):
             if c[end]["name"].startswith("Generate Coordinates for ADSB.lol"):
-                c[end]["name"] = f"Generate Coordinates for ADSB.lol ({ADSB_POLL})"
+                c[end]["name"] = name
     if changed:
         json.dump(flow, open(SRC, "w"), indent=2)
-        print(f"updated {os.path.relpath(SRC, ROOT)}: poll every {ADSB_POLL}")
+        print(f"updated {os.path.relpath(SRC, ROOT)}: CRON {ADSB_CRON}")
 
 
 if __name__ == "__main__":
