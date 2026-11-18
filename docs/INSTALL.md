@@ -73,9 +73,10 @@ username or password* or HTTP 401 until the sync has run.
    `HORUS_HTTP_CONTACT`.
 3. Start a session and open a terminal. The repo lives at `/home/cdsw/horus`.
    Run every command below from there, and give Application scripts paths
-   that start with `horus/`, for example `horus/services/tileserver/serve-tiles.py`. The Kafka brokers are only reachable
-   from inside the CDP network, so run the provisioner from Workbench, not from
-   a laptop.
+   that start with `horus/`, for example
+   `horus/services/tileserver/serve-tiles.py`. The Kafka brokers are only
+   reachable from inside the CDP network, so run the provisioner from
+   Workbench, not from a laptop.
 
 ```bash
 pip install -r provision/requirements.txt
