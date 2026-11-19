@@ -13,9 +13,9 @@ Status values: Todo / Doing / Done / Blocked / Cut. Estimates are hours.
 
 | ID | Item | Done when | Est | Status |
 |---|---|---|---|---|
-| A1 | Next.js 16.2.6 → 16.4.3 or later (security advisories). Moved from BURNDOWN 2.1. | Build and smoke test pass | 1 | Todo |
+| A1 | Next.js 16.2.6 → 16.4.3 or later (security advisories). Moved from BURNDOWN 2.1. Went to 16.4.6 (with eslint-config-next): the Next advisories cover up to 16.4.4, so 16.4.3 was not enough. Also clears the nested postcss and nanoid advisories. | Build and smoke test pass | 1 | Done |
 | A2 | Port the upstream OSIRIS security fixes: image optimizer disabled, tile proxy narrowed, ArcGIS server-side request forgery fix, rate limits that bind. Moved from BURNDOWN 2.2. | Each fix ported or confirmed not applicable | 3 | Todo |
-| A3 | Audit pass on every service: `npm audit` (UI, intel, tile server) and `pip-audit` (gateway, memgraph shim, provisioner); fix or record each finding | No unexplained high or critical findings | 3 | Todo |
+| A3 | Audit pass on every service: `npm audit` (UI, intel, tile server) and `pip-audit` (gateway, memgraph shim, provisioner); fix or record each finding | No unexplained high or critical findings. UI findings left after A1: **maplibre-gl** critical (XSS in its HTML sanitizer; Horus popups use `setHTML`; fix needs maplibre 6.x, a major upgrade from 5.24), **sharp** high (libvips/libheif CVEs; fix is 0.35.5, breaking from 0.34), **source-map-js** and **baseline-browser-mapping** (`npm audit fix`) | 3 | Todo |
 | A4 | Pin every base image by digest and every package by exact version (lockfiles already pin npm) | Rebuilds are reproducible | 1 | Todo |
 
 ## B. One image per service
