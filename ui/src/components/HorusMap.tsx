@@ -47,7 +47,6 @@ interface HorusMapProps {
   projection?: 'mercator' | 'globe';
   mapStyle?: string;
   demoMode?: boolean;
-  theme?: 'core' | 'ghost';
   timeTravelActive?: boolean;
   timeTravelFrame?: { asset_id: string; asset_type: string; lat: number; lng: number; t: number; name?: string }[];
 }
@@ -74,7 +73,7 @@ function computeSolarTerminator(): [number, number][] {
 
 const EMPTY_FC = { type: 'FeatureCollection' as const, features: [] };
 
-function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', mapStyle = 'dark', demoMode = false, theme = 'core', timeTravelActive = false, timeTravelFrame = [], allowPublicTiles = true }: HorusMapProps) {
+function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', mapStyle = 'dark', demoMode = false, timeTravelActive = false, timeTravelFrame = [], allowPublicTiles = true }: HorusMapProps) {
   // Read inside the map's one-time error handler, so keep the latest value in a ref.
   const allowPublicTilesRef = useRef(allowPublicTiles);
   allowPublicTilesRef.current = allowPublicTiles;
@@ -206,34 +205,31 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
       mapRef.current = map;
       
       // Theme colors
-      const isGhost = theme === 'ghost';
-      const phantomPurple = '#B388FF';
-      const phantomDark = '#1A0040';
-      const cameraColor = isGhost ? '#B388FF' : '#00E676';
-      const flightCom = isGhost ? phantomPurple : '#00E5FF';
-      const flightPriv = isGhost ? phantomPurple : '#FFD700';
-      const flightGov = isGhost ? phantomPurple : '#FF9500';
-      const flightMil = isGhost ? phantomPurple : '#FF3D3D';
+      const cameraColor = '#00E676';
+      const flightCom = '#00E5FF';
+      const flightPriv = '#FFD700';
+      const flightGov = '#FF9500';
+      const flightMil = '#FF0000';
 
       // Create icons — HORUS Unified Palette
       createIcon(map, 'plane-cyan', flightCom, 24);   
       createIcon(map, 'plane-green', flightPriv, 24);   
       createIcon(map, 'plane-pink', flightGov, 24);    
       createIcon(map, 'plane-red', flightMil, 24);     
-      createIcon(map, 'plane-grey', isGhost ? phantomPurple : '#546E7A', 24);
+      createIcon(map, 'plane-grey', '#546E7A', 24);
       // Aircraft carrying an ICAO airline designator (airline_code) are graph-enrichable
       // — render them in a distinct royal blue (theme-independent marker).
       createIcon(map, 'plane-enrich', '#448AFF', 24);
       // TimeTravel historical aircraft — amber plane icon (matches the replay palette).
       createIcon(map, 'plane-amber', '#FFCA28', 24);
-      createDot(map, 'dot-gold', isGhost ? phantomPurple : '#D4AF37', 8);
-      createDot(map, 'dot-red', isGhost ? phantomPurple : '#D32F2F', 10);
-      createDot(map, 'dot-orange', isGhost ? phantomPurple : '#E65100', 10);
-      createDot(map, 'dot-green', isGhost ? phantomPurple : '#26A69A', 10);
-      createDot(map, 'dot-fire', isGhost ? phantomPurple : '#E65100', 10);
+      createDot(map, 'dot-gold', '#D4AF37', 8);
+      createDot(map, 'dot-red', '#D32F2F', 10);
+      createDot(map, 'dot-orange', '#E65100', 10);
+      createDot(map, 'dot-green', '#26A69A', 10);
+      createDot(map, 'dot-fire', '#E65100', 10);
       createDot(map, 'dot-cctv', cameraColor, 10);
 
-      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','sigint-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'sdk-entities', 'sdk-links', 'malware-nodes', 'network-mesh', 'timetravel'];
+      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','sigint-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'malware-nodes', 'network-mesh', 'timetravel'];
       sources.forEach(s => map.addSource(s, { type: 'geojson', data: EMPTY_FC }));
 
       // Warning icon generator (parameterized — eliminates 3x copy-paste)
@@ -275,7 +271,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
 
 
       // Day/Night
-      map.addLayer({ id: 'day-night-fill', type: 'fill', source: 'day-night', paint: { 'fill-color': isGhost ? '#0D0030' : '#000022', 'fill-opacity': 0.35 }});
+      map.addLayer({ id: 'day-night-fill', type: 'fill', source: 'day-night', paint: { 'fill-color': '#000022', 'fill-opacity': 0.35 }});
 
       // Earthquakes — amber threat spectrum
       map.addLayer({ id: 'eq-circles', type: 'circle', source: 'earthquakes', paint: {
@@ -330,7 +326,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         'text-offset': [0, 1.5], 'text-max-width': 10, 'text-allow-overlap': false,
       }, paint: { 'text-color': '#D32F2F', 'text-halo-color': '#111', 'text-halo-width': 1.5, 'text-opacity': 0.85 }});
 
-      // ── NETWORK INTEL MESH (SDK STYLE) ──
+      // ── NETWORK INTEL MESH ──
       map.addLayer({ id: 'network-mesh-atmo', type: 'line', source: 'network-mesh', paint: {
 
         'line-width': ['interpolate',['linear'],['zoom'], 1, 2, 5, 4, 10, 8],
@@ -516,55 +512,6 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         'text-field': ['concat', ['to-string', ['get','reading']], ' nSv/h'], 'text-size': 9, 'text-font': ['Noto Sans Regular'],
         'text-offset': [0, 1.5], 'text-allow-overlap': false,
       }, paint: { 'text-color': ['match', ['get','status'], 'DANGER','#D32F2F', 'WARNING','#E65100', '#7E57C2'], 'text-halo-color': '#000', 'text-halo-width': 1 }});
-
-      // ══ HORUS SDK — Lattice Intelligence Mesh ══
-      // Polybolos Style: Delicate, translucent, steel-blue splined mesh
-
-      // ── SEA domain (Distinct Solid Lines) ──
-      // Removed glow to match the clean, diagrammatic look of submarinecablemap.com
-      map.addLayer({ id: 'sdk-sea', type: 'line', source: 'sdk-links', filter: ['==',['get','domain'],'SEA'], paint: {
-        'line-color': ['coalesce', ['get', 'color'], '#1976D2'], // Single solid color from properties
-        'line-width': ['interpolate',['linear'],['zoom'], 1, 0.8, 5, 1.5, 10, 2.5],
-        'line-opacity': ['interpolate',['linear'],['zoom'], 1, 0.3, 5, 0.5, 10, 0.7],
-      }});
-
-      // ── AIR domain (Steel Gray / Cyan) ──
-      map.addLayer({ id: 'sdk-air-atmo', type: 'line', source: 'sdk-links', filter: ['==',['get','domain'],'AIR'], paint: {
-        'line-color': '#4DD0E1',
-        'line-width': ['interpolate',['linear'],['zoom'], 1, 1.5, 5, 5, 10, 8],
-        'line-opacity': 0.04,
-        'line-blur': 3,
-      }});
-      map.addLayer({ id: 'sdk-air-glow', type: 'line', source: 'sdk-links', filter: ['==',['get','domain'],'AIR'], paint: {
-        'line-color': '#80DEEA',
-        'line-width': ['interpolate',['linear'],['zoom'], 1, 0.8, 5, 2, 10, 4],
-        'line-opacity': ['interpolate',['linear'],['zoom'], 1, 0.08, 5, 0.12, 10, 0.18],
-        'line-blur': 1,
-      }});
-      map.addLayer({ id: 'sdk-air', type: 'line', source: 'sdk-links', filter: ['==',['get','domain'],'AIR'], paint: {
-        'line-color': '#B2EBF2',
-        'line-width': ['interpolate',['linear'],['zoom'], 1, 0.15, 5, 0.6, 10, 1.2],
-        'line-opacity': ['interpolate',['linear'],['zoom'], 1, 0.2, 5, 0.35, 10, 0.5],
-      }});
-
-      // ── INTEL domain (Deep Steel / Violet) ──
-      map.addLayer({ id: 'sdk-intel-atmo', type: 'line', source: 'sdk-links', filter: ['==',['get','domain'],'INTEL'], paint: {
-        'line-color': '#7986CB',
-        'line-width': ['interpolate',['linear'],['zoom'], 1, 2.5, 5, 7, 10, 12],
-        'line-opacity': 0.06,
-        'line-blur': 5,
-      }});
-      map.addLayer({ id: 'sdk-intel-glow', type: 'line', source: 'sdk-links', filter: ['==',['get','domain'],'INTEL'], paint: {
-        'line-color': '#9FA8DA',
-        'line-width': ['interpolate',['linear'],['zoom'], 1, 1.2, 5, 3, 10, 6],
-        'line-opacity': ['interpolate',['linear'],['zoom'], 1, 0.12, 5, 0.18, 10, 0.25],
-        'line-blur': 2,
-      }});
-      map.addLayer({ id: 'sdk-intel', type: 'line', source: 'sdk-links', filter: ['==',['get','domain'],'INTEL'], paint: {
-        'line-color': '#C5CAE9',
-        'line-width': ['interpolate',['linear'],['zoom'], 1, 0.3, 5, 1, 10, 2],
-        'line-opacity': ['interpolate',['linear'],['zoom'], 1, 0.3, 5, 0.45, 10, 0.7],
-      }});
 
       // TimeTravel replay entities. Aircraft render as a yellow plane icon (matching
       // the live symbology); vessels/other keep the amber "historical" halo + dot.
@@ -818,31 +765,8 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
     });
 
 
-    // ── HORUS SDK link click ──
-    ['sdk-sea','sdk-sea-glow','sdk-air','sdk-air-glow','sdk-intel','sdk-intel-glow'].forEach(layer => {
-      map.on('click', layer, e => {
-        if (!e.features?.length) return;
-        const p = e.features[0].properties as any;
-        const coords = e.lngLat;
-        const domainLabel = p.domain === 'SEA' ? '⚓ MARITIME' : p.domain === 'AIR' ? '✈ AIR CORRIDOR' : '🛡 NAVAL INTEL';
-        const domainColor = p.domain === 'SEA' ? '#4FC3F7' : p.domain === 'AIR' ? '#B3E5FC' : '#81D4FA';
-        popup([coords.lng, coords.lat], `<div style="${pStyle}border:1px solid ${domainColor}40;">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-            <div style="width:8px;height:8px;border-radius:50%;background:${domainColor};box-shadow:0 0 8px ${domainColor};"></div>
-            <span style="color:${domainColor};font-size:11px;font-weight:700;letter-spacing:0.1em;">${domainLabel}</span>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:9px;margin-bottom:8px;">
-            <div><span style="color:#5C5A54;">FROM</span><br/><span style="color:#E8E6E0;">${htmlEsc(p.fromName || 'Origin')}</span></div>
-            <div><span style="color:#5C5A54;">TO</span><br/><span style="color:#E8E6E0;">${htmlEsc(p.toName || 'Destination')}</span></div>
-            <div><span style="color:#5C5A54;">DOMAIN</span><br/><span style="color:${domainColor};">${p.domain}</span></div>
-            <div><span style="color:#5C5A54;">SOURCE</span><br/><span style="color:${domainColor};">${htmlEsc(p.source || 'HORUS')}</span></div>
-          </div>
-        </div>`);
-      });
-    });
-
     // ── Generic hover for clickables ──
-    ['conflict-icons','cctv-dots','eq-circles','sat-dots','fires-heat','gdelt-dots','weather-dots','infra-dots','maritime-dots','choke-dots','news-dots','sigint-news-dots','balloon-dots','rad-dots','ship-dots','sdk-sea','sdk-sea-glow','sdk-sea-atmo','sdk-air','sdk-air-glow','sdk-air-atmo','sdk-intel','sdk-intel-glow','sdk-intel-atmo','malware-dots'].forEach(layer => {
+    ['conflict-icons','cctv-dots','eq-circles','sat-dots','fires-heat','gdelt-dots','weather-dots','infra-dots','maritime-dots','choke-dots','news-dots','sigint-news-dots','balloon-dots','rad-dots','ship-dots','malware-dots'].forEach(layer => {
       map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
     });
@@ -1070,50 +994,6 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
     setGeo('military', activeLayers.military ? toFeatures(data.military_flights) : []);
   }, [mapReady, data.commercial_flights, data.private_flights, data.private_jets, data.military_flights, activeLayers.flights, activeLayers.private, activeLayers.jets, activeLayers.military]);
 
-    // Update aircraft icon colors dynamically on theme switch
-    useEffect(() => {
-      if (!mapReady || !mapRef.current) return;
-      const map = mapRef.current;
-      
-      const isGhost = theme === 'ghost';
-      const phantomPurple = '#B388FF';
-      const ghostPriv = '#CE93D8';
-      const ghostGov = '#D500F9';
-
-      const flightCom = isGhost ? phantomPurple : '#00E5FF';
-      const flightPriv = isGhost ? ghostPriv : '#FFD700';
-      const flightGov = isGhost ? ghostGov : '#FF9500';
-      const flightMil = '#FF0000';
-
-      const updateMapIcon = (id: string, color: string, size: number) => {
-        if (!map.hasImage(id)) return;
-        const canvas = document.createElement('canvas');
-        canvas.width = size; canvas.height = size;
-        const ctx = canvas.getContext('2d')!;
-        const cx = size / 2, cy = size / 2;
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.moveTo(cx, cy - size * 0.4);
-        ctx.lineTo(cx - size * 0.12, cy + size * 0.1);
-        ctx.lineTo(cx - size * 0.4, cy + size * 0.2);
-        ctx.lineTo(cx - size * 0.4, cy + size * 0.3);
-        ctx.lineTo(cx - size * 0.12, cy + size * 0.15);
-        ctx.lineTo(cx, cy + size * 0.35);
-        ctx.lineTo(cx + size * 0.12, cy + size * 0.15);
-        ctx.lineTo(cx + size * 0.4, cy + size * 0.3);
-        ctx.lineTo(cx + size * 0.4, cy + size * 0.2);
-        ctx.lineTo(cx + size * 0.12, cy + size * 0.1);
-        ctx.closePath();
-        ctx.fill();
-        map.updateImage(id, { width: size, height: size, data: new Uint8Array(ctx.getImageData(0, 0, size, size).data) });
-      };
-
-      updateMapIcon('plane-cyan', flightCom, 24);
-      updateMapIcon('plane-green', flightPriv, 24);
-      updateMapIcon('plane-pink', flightGov, 24);
-      updateMapIcon('plane-red', flightMil, 24);
-      updateMapIcon('plane-grey', isGhost ? phantomPurple : '#546E7A', 24);
-    }, [mapReady, theme]);
 
   // ── DECOUPLED LAYER RENDERERS (Performance Optimized) ──
 
@@ -1248,48 +1128,6 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
     setGeo('radiation', activeLayers.radiation && data.radiation ? data.radiation.map((r: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [r.lng, r.lat] }, properties: { name: r.name, city: r.city, country: r.country, reading: r.reading, status: r.status, network: r.network } })) : []);
   }, [mapReady, data.radiation, activeLayers.radiation, setGeo]);
 
-  // ══ HORUS SDK — Lattice Sensor Mesh ══
-  // Uses real submarine cable data for SEA domain, curated routes for AIR/INTEL
-  useEffect(() => {
-    if (!mapReady) return;
-    setGeo('sdk-entities', []);
-
-    const anySDK = activeLayers.sdk_sea || activeLayers.sdk_air || activeLayers.sdk_naval;
-    if (!anySDK) {
-      setGeo('sdk-links', []);
-      return;
-    }
-
-    const links: any[] = [];
-
-    // ── SEA DOMAIN: Real submarine cable data (1-for-1 Match) ──
-    if (activeLayers.sdk_sea && data.submarine_cables) {
-      const ignoredColors = new Set(['#9BB5CC', '#A0B8CD', '#8EABC2', '#9bb5cc', '#a0b8cd', '#8eabc2']);
-      for (const cable of data.submarine_cables) {
-        if (!cable.geometry) continue;
-        
-        // Remove the light blue background arcs
-        if (cable.properties?.color && ignoredColors.has(cable.properties.color)) continue;
-        
-        links.push({
-          type: 'Feature',
-          geometry: cable.geometry, // Raw topographic paths exactly from Submarine Map
-          properties: {
-            domain: 'SEA',
-            fromName: cable.properties?.name || 'Submarine Cable',
-            toName: cable.properties?.landing_points || '',
-            source: 'Global Subsea Cable Network',
-            url: 'https://www.submarinecablemap.com/',
-            ...cable.properties,
-            color: '#1976D2', // Darker blue as requested, more transparent in layer paint
-          },
-        });
-      }
-    }
-
-    setGeo('sdk-links', links);
-  }, [mapReady, activeLayers.sdk_sea, activeLayers.sdk_air, activeLayers.sdk_naval, data.submarine_cables, setGeo]);
-
   useEffect(() => {
     if (!mapReady) return;
     setGeo('live-news', activeLayers.live_news && data.live_feeds ? data.live_feeds.map((f: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [f.lng, f.lat] }, properties: { name: f.name, city: f.city, country: f.country, url: f.url, category: f.category, embed_allowed: f.embed_allowed !== false } })) : []);
@@ -1363,9 +1201,6 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
 
     setVis(['balloon-dots','balloon-label'], activeLayers.balloons);
     setVis(['rad-glow','rad-dots','rad-label'], activeLayers.radiation);
-    setVis(['sdk-sea','sdk-sea-glow','sdk-sea-atmo'], activeLayers.sdk_sea !== false);
-    setVis(['sdk-air','sdk-air-glow','sdk-air-atmo'], activeLayers.sdk_air !== false);
-    setVis(['sdk-intel','sdk-intel-glow','sdk-intel-atmo'], activeLayers.sdk_naval !== false);
   }, [mapReady, activeLayers, setVis]);
 
   // Fly-to
