@@ -623,7 +623,10 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
 
     // ── XSS PROTECTION HELPERS ──
     const htmlEsc = (s: any): string => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-    const idSafe = (s: any): string => String(s ?? '').replace(/[^a-zA-Z0-9_\.\-]/g, '');
+    // For values placed inside the popups' inline onclick JS strings: keeps letters in any
+    // script, digits, spaces and ':' (hormuz.now:<id>, ship names) but never quotes,
+    // backslashes or <>&, so a value can't break out of the string or the attribute.
+    const idSafe = (s: any): string => String(s ?? '').replace(/[^\p{L}\p{N} _.:\-]/gu, '');
     const colorSafe = (s: any): string => /^#[0-9a-fA-F]{3,8}$/.test(String(s ?? '')) ? String(s) : '#aaa';
 
     // ── Flights ──
@@ -660,7 +663,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
       const nm = idSafe(String(p.name || p.asset_id || ''));
       const isSea = String(p.kind || '') === 'vessel';
       const intel = isSea
-        ? `window.openHorusIntel({ type: 'vessel', mmsi: '${id}', name: '${nm}' })`
+        ? `window.openHorusIntel({ type: 'vessel', asset_id: '${id}', mmsi: '${/^\d{9}$/.test(id) ? id : ''}', name: '${nm}' })`
         : `window.openHorusIntel({ callsign: '${nm}', icao24: '${id}' })`;
       const glyph = isSea ? '🚢' : '✈';
       popup(coords, `<div style="${pStyle}border:1px solid rgba(255,202,40,0.4);">
@@ -903,7 +906,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         <div><span style="color:#5C5A54;font-size:9px;">DESTINATION: </span><span style="color:#E8E6E0;font-size:9px;">${p.destination || 'UNKNOWN'}</span></div>
         ${p.sources ? `<div style="margin-top:4px;"><span style="color:#5C5A54;font-size:9px;">SOURCES: </span><span style="color:#E8E6E0;font-size:9px;">${String(p.sources).split(',').map(idSafe).join(' · ')}</span></div>` : ''}
         ${String(p.sources || '').split(',').includes('hormuz.now') ? `<div style="font-size:8px;color:#5C5A54;margin-top:2px;">Data: <a href="https://hormuz.now" target="_blank" rel="noopener noreferrer" style="color:#8A8780;">hormuz.now</a> (CC BY 4.0)</div>` : ''}
-        <button onclick="window.openHorusIntel({ type: 'vessel', mmsi: '${idSafe(String(p.mmsi||''))}', imo: '${idSafe(String(p.imo||''))}', name: '${idSafe(p.name||'')}', flag: '${idSafe(p.flag||'')}', speed: '${idSafe(String(p.speed??''))}', destination: '${idSafe(p.destination||'')}' })" style="width:100%;margin-top:10px;padding:6px 12px;background:${color}26;border:1px solid ${color}80;color:${color};font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:bold;letter-spacing:0.1em;border-radius:4px;cursor:pointer;">[ DEEP DIVE INTEL ]</button>
+        <button onclick="window.openHorusIntel({ type: 'vessel', asset_id: '${idSafe(String(p.id||''))}', mmsi: '${idSafe(String(p.mmsi||''))}', imo: '${idSafe(String(p.imo||''))}', name: '${idSafe(p.name||'')}', flag: '${idSafe(p.flag||'')}', speed: '${idSafe(String(p.speed??''))}', destination: '${idSafe(p.destination||'')}' })" style="width:100%;margin-top:10px;padding:6px 12px;background:${color}26;border:1px solid ${color}80;color:${color};font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:bold;letter-spacing:0.1em;border-radius:4px;cursor:pointer;">[ DEEP DIVE INTEL ]</button>
       </div>`);
     });
 

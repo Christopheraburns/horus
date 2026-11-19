@@ -77,10 +77,17 @@ def _haversine_km(a_lat: float, a_lng: float, b_lat: float, b_lng: float) -> flo
 
 
 def _lake_asset_id(entity: dict) -> str:
-    """The events_iceberg asset_id: icao24 for aircraft, mmsi for vessels."""
+    """The events_iceberg asset_id: icao24 for aircraft; for vessels the id the
+    live map keys it on (MMSI, or ``hormuz.now:<id>`` for a vessel without one)."""
     if (entity.get("type") or "").lower() == "vessel":
-        return str(entity.get("mmsi") or entity.get("imo") or "").strip()
+        return str(entity.get("asset_id") or entity.get("mmsi") or entity.get("imo") or "").strip()
     return str(entity.get("icao24") or entity.get("callsign") or "").strip()
+
+
+# Pattern of Life writes up facts already gathered, so it needs little reasoning.
+# Mistral Large 4 accepts low, medium or high (not none); low keeps the silent
+# wait before the first word short. Empty = use LLM_REASONING_EFFORT.
+REASONING_EFFORT = os.environ.get("POL_REASONING_EFFORT", "low").strip()
 
 
 def _ms(since: float) -> int:
@@ -138,8 +145,10 @@ def _observed_facts(subject: str, entity: dict) -> list[dict]:
 
     if (entity.get("type") or "").lower() == "vessel":
         add("kind", "vessel")
-        add("mmsi", entity.get("mmsi"))
-        add("imo", entity.get("imo"))
+        mmsi = str(entity.get("mmsi") or "").strip()
+        add("mmsi", mmsi if mmsi.isdigit() and len(mmsi) == 9 else None)   # never another kind of id
+        imo = str(entity.get("imo") or "").strip()
+        add("imo", imo if imo.isdigit() and len(imo) == 7 else None)
         add("flag", entity.get("flag"))
         add("destination", entity.get("destination"))
         add("speed_knots", entity.get("speed"))
@@ -156,7 +165,10 @@ def _track_features(subject: str, track: list[dict]) -> list[dict]:
     facts: list[dict] = []
     n = len(track)
     if n == 0:
-        facts.append(_fact(subject, "track", "no recorded positions in the window", "lake:track"))
+        facts.append(_fact(subject, "track",
+                           "no positions found in the lake for this asset id in the window; the asset may be "
+                           "new or recorded under another id. This is missing data, not a signal gap or dropout",
+                           "lake:track"))
         return facts
 
     t0, t1 = track[0]["t"], track[-1]["t"]
@@ -266,13 +278,14 @@ async def stream(entity: dict, window_hours: Any = None) -> AsyncIterator[bytes]
     )
     parts: list[str] = []
     t = time.monotonic()
-    async for token in llm.chat_stream(SYSTEM_PROMPT, user_prompt):
+    async for token in llm.chat_stream(SYSTEM_PROMPT, user_prompt, REASONING_EFFORT):
         if not parts:
             timings["llm_first_token_ms"] = _ms(t)
         parts.append(token)
         yield _line({"type": "token", "text": token})
     timings["llm_total_ms"] = _ms(t)
     timings["llm_chunks"] = len(parts)
+    timings["reasoning_effort"] = REASONING_EFFORT or llm.REASONING_EFFORT or "default"
     timings["prompt_chars"] = len(SYSTEM_PROMPT) + len(user_prompt)
 
     latency = _ms(started)

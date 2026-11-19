@@ -296,7 +296,8 @@ The feeds-gateway serves every AI feature in Horus: the `/llm` page, Ask Horus
 | `LLM_BASE_URL` | `https://api.mistral.ai/v1` (Mistral Studio) |
 | `LLM_API_KEY` | a Mistral API key from Mistral Studio |
 | `LLM_MODEL` | `mistral-large-4` (the default) |
-| `LLM_REASONING_EFFORT` | optional: `none` for faster answers, `high` to force reasoning |
+| `LLM_REASONING_EFFORT` | optional: `low`, `medium` or `high` for Mistral Large 4 (it rejects `none`). A reasoning model thinks before its first word and the gateway doesn't show the thinking, so higher means a longer silent wait |
+| `POL_REASONING_EFFORT` | optional, default `low`: the effort for Pattern of Life only, which writes up facts already gathered. Empty uses `LLM_REASONING_EFFORT` |
 
 For an air-gapped environment, keep the same variables and point them at the
 on-prem endpoint: Mistral deployed on-prem, or a Mistral model served by

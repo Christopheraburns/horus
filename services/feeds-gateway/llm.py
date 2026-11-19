@@ -121,15 +121,16 @@ def _text_of(content) -> str:
     return ""
 
 
-async def _chat_stream_openai(system: str, user: str) -> AsyncIterator[str]:
+async def _chat_stream_openai(system: str, user: str, reasoning_effort: str = "") -> AsyncIterator[str]:
     payload = {
         "model": OPENAI_MODEL,
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
         "stream": True,
         "temperature": 0.2,
     }
-    if REASONING_EFFORT:
-        payload["reasoning_effort"] = REASONING_EFFORT
+    effort = reasoning_effort or REASONING_EFFORT
+    if effort:
+        payload["reasoning_effort"] = effort
     try:
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
             async with client.stream("POST", _chat_url(), json=payload, headers=_openai_headers()) as resp:
@@ -188,10 +189,15 @@ async def _chat_stream_ollama(system: str, user: str) -> AsyncIterator[str]:
         yield f"[LLM unavailable: {exc}]"
 
 
-async def chat_stream(system: str, user: str) -> AsyncIterator[str]:
-    """Yield answer tokens as they are generated (provider-agnostic)."""
+async def chat_stream(system: str, user: str, reasoning_effort: str = "") -> AsyncIterator[str]:
+    """Yield answer tokens as they are generated (provider-agnostic).
+
+    ``reasoning_effort`` overrides LLM_REASONING_EFFORT for this call (OpenAI-style
+    endpoints only). A reasoning model thinks before its first answer token, and
+    that thinking is not shown, so a higher effort is a longer silent wait.
+    """
     if PROVIDER == "openai":
-        async for tok in _chat_stream_openai(system, user):
+        async for tok in _chat_stream_openai(system, user, reasoning_effort):
             yield tok
     else:
         async for tok in _chat_stream_ollama(system, user):

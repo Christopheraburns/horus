@@ -224,7 +224,10 @@ def reshape_vessel(rec: dict) -> dict:
     position = _as_dict(entity.get("position"))
     props = _as_dict(entity.get("properties"))
 
+    # Only a real nine-digit MMSI; a vessel keyed on another id (hormuz.now:<id>) has none.
     mmsi = _first(props.get("mmsi"), entity.get("id"))
+    if mmsi is not None and not (str(mmsi).isdigit() and len(str(mmsi)) == 9):
+        mmsi = None
     # AIS frequently reports IMO 0 (absent) — treat that as no IMO.
     imo = _first(props.get("imo"))
     if imo in (0, "0", 0.0):
@@ -232,7 +235,7 @@ def reshape_vessel(rec: dict) -> dict:
 
     provider = _as_dict(entity.get("source")).get("provider")
     item = {
-        "id": _first(mmsi, entity.get("id")),
+        "id": _first(entity.get("id"), mmsi),
         "mmsi": mmsi,
         "name": _first(entity.get("name"), props.get("name"), props.get("shipname")),
         "lat": _first(position.get("lat"), entity.get("lat")),

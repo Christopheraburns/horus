@@ -181,7 +181,9 @@ function EntityGraphPanel({ entity, onClose }: Props) {
           registration: entity.properties?.registration,
           model: entity.properties?.model,
           mmsi: entity.properties?.mmsi,
-          imo: entity.properties?.imo || (entity.type === 'vessel' ? entity.id : undefined),
+          // Only a real IMO: an MMSI or other id sent as the IMO became a false fact.
+          imo: entity.properties?.imo,
+          asset_id: entity.properties?.asset_id,
           flag: entity.properties?.flag,
           speed: entity.properties?.speed,
           destination: entity.properties?.destination,
