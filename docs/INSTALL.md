@@ -124,10 +124,10 @@ Flights come from two flows:
 
 | Flow | Source | Rate | Notes |
 |---|---|---|---|
-| `Flights (OpenSky)` | `opensky-network.org/api/states/all`, the whole world in one call | every 90 seconds, about 3,840 of a standard account's 4,000 daily credits | Needs an OpenSky account. On the account page, create an **API client**, then set `HORUS_OPENSKY_CLIENT_ID` and `HORUS_OPENSKY_CLIENT_SECRET`. A standard account is for non-commercial use; OpenSky sells a licensed tier for commercial use. |
+| `Flights (OpenSky)`, **off by default** | `opensky-network.org/api/states/all`, the whole world in one call | every 90 seconds, about 3,840 of a standard account's 4,000 daily credits | OpenSky blocks cloud-provider addresses: from AWS the token request times out. Imported and started only when `HORUS_ENABLE_OPENSKY=1` (for on-prem or non-cloud NiFi). Needs an OpenSky account. On the account page, create an **API client**, then set `HORUS_OPENSKY_CLIENT_ID` and `HORUS_OPENSKY_CLIENT_SECRET`. A standard account is for non-commercial use; OpenSky sells a licensed tier for commercial use. |
 | `Flights (adsb.lol)` | six 250 NM circles around major hubs | every 12 minutes, 13:00–03:48 UTC (7 AM–10 PM US Central), about 450 requests a day | Anonymous; adsb.lol allows 500 requests per UTC day per IP (resets 00:00 UTC). The schedule is CRON-driven in the NiFi server's time zone (UTC on Data Hub nodes); change the hours to suit your team. It adds aircraft type and registration, which OpenSky's live data lacks. |
 
-Both publish to the same topic. The live map keeps the newest position per
+When both run, they publish to the same topic. The live map keeps the newest position per
 aircraft. The lake keeps both, tagged by `source_provider`.
 
 Re-running `create --yes` doesn't change flows that already exist in NiFi. To

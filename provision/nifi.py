@@ -126,10 +126,19 @@ class NiFi:
                   json={"id": group_id, "state": state, "disconnectedNodeAcknowledged": False})
 
 
-def load_flows(instance: str, ctx_name: str) -> List[tuple]:
-    """(group_name, flow_json) for every flow, re-pointed at this instance's context."""
+# Flows that are imported and started only when asked for (HORUS_ENABLE_OPENSKY=1).
+# OpenSky blocks cloud-provider addresses, so from AWS its flow can only time out.
+OPTIONAL_FLOWS = {"HORUS_Flights_OpenSky.json": "opensky"}
+
+
+def load_flows(instance: str, ctx_name: str, optional: frozenset = frozenset()) -> List[tuple]:
+    """(group_name, flow_json) for every flow, re-pointed at this instance's context.
+    Optional flows are included only if their key is in ``optional``."""
     out = []
     for path in sorted(glob.glob(os.path.join(FLOW_DIR, "HORUS_*.json"))):
+        key = OPTIONAL_FLOWS.get(os.path.basename(path))
+        if key and key not in optional:
+            continue
         flow = json.load(open(path))
         flow = copy.deepcopy(flow)
         name = flow["flowContents"]["name"].replace("HORUS - ", f"HORUS-{instance} - ", 1)
@@ -149,21 +158,23 @@ def load_flows(instance: str, ctx_name: str) -> List[tuple]:
     return out
 
 
-def inspect(nifi: NiFi, instance: str, ctx_name: str) -> dict:
-    """Read-only: does our context exist, and the run state of each Horus group."""
+def inspect(nifi: NiFi, instance: str, ctx_name: str, optional: frozenset = frozenset()) -> dict:
+    """Read-only: does our context exist, and the run state of each enabled Horus group
+    (an optional flow left disabled in NiFi is not counted)."""
     ctx = any(c["component"]["name"] == ctx_name for c in nifi.parameter_contexts())
     prefix = f"HORUS-{instance} - "
+    wanted = {name for name, _ in load_flows(instance, ctx_name, optional)}
     groups = {}
     for g in nifi.child_groups(nifi.root_id()):
         name = g["component"]["name"]
-        if name.startswith(prefix):
+        if name in wanted:
             groups[name[len(prefix):]] = {k: g.get(k, 0) for k in
                                           ("runningCount", "stoppedCount", "invalidCount", "disabledCount")}
-    return {"context": ctx, "groups": groups, "expected": len(load_flows(instance, ctx_name))}
+    return {"context": ctx, "groups": groups, "expected": len(wanted)}
 
 
 def deploy(nifi: NiFi, instance: str, ctx_name: str, params: Dict[str, tuple],
-           start: bool, log=print) -> Dict[str, str]:
+           start: bool, log=print, optional: frozenset = frozenset()) -> Dict[str, str]:
     """Create/refresh the context, import missing flows, enable services, optionally start."""
     log(f"nifi: authenticated as {nifi.whoami()}")
     ctx_id = nifi.ensure_parameter_context(ctx_name, params)
@@ -172,7 +183,7 @@ def deploy(nifi: NiFi, instance: str, ctx_name: str, params: Dict[str, tuple],
     root = nifi.root_id()
     by_name = {g["component"]["name"]: g for g in nifi.child_groups(root)}
     groups: Dict[str, str] = {}
-    for i, (name, flow) in enumerate(load_flows(instance, ctx_name)):
+    for i, (name, flow) in enumerate(load_flows(instance, ctx_name, optional)):
         g = by_name.get(name)
         if g is None:
             g = nifi.upload_flow(root, name, flow, x=400.0 * (i % 3), y=300.0 * (i // 3) + 600.0)

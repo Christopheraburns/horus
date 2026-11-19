@@ -47,6 +47,7 @@ class Config:
     http_contact: Optional[str] = None
     opensky_client_id: Optional[str] = None
     opensky_client_secret: Optional[str] = field(repr=False, default=None)
+    enable_opensky: bool = False
     lake_catalog: str = "iceberg"
     problems: List[str] = field(default_factory=list)
 
@@ -74,6 +75,10 @@ class Config:
     @property
     def flink_job(self) -> str:
         return f"horus_{self.instance}_kafka_to_iceberg"
+
+    @property
+    def optional_flows(self) -> frozenset:
+        return frozenset(["opensky"] if self.enable_opensky else [])
 
     @property
     def alerts_topic(self) -> str:
@@ -127,6 +132,7 @@ def load(dotenv_path: str = ".env") -> Config:
         http_contact=_env("HORUS_HTTP_CONTACT"),
         opensky_client_id=_env("HORUS_OPENSKY_CLIENT_ID"),
         opensky_client_secret=_env("HORUS_OPENSKY_CLIENT_SECRET"),
+        enable_opensky=(_env("HORUS_ENABLE_OPENSKY", "0") or "0").lower() in ("1", "true", "yes"),
         lake_catalog=_env("LAKE_CATALOG", "iceberg"),
         problems=problems,
     )

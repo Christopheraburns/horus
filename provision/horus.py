@@ -364,7 +364,7 @@ def deploy_data_plane(cfg: cfgmod.Config, rep: Report, start_flows: bool) -> int
             try:
                 n = nifimod.NiFi(rep.nifi_api, user, pw, verify=ca)
                 nifimod.deploy(n, cfg.instance, cfg.parameter_context, params,
-                               start=start_flows and kafka_ok)
+                               start=start_flows and kafka_ok, optional=cfg.optional_flows)
             except Exception as e:  # noqa: BLE001
                 print(f"nifi: FAILED: {e}")
                 failures += 1
@@ -443,7 +443,7 @@ def check_data_plane(cfg: cfgmod.Config, rep: Report) -> None:
             import nifi as nifimod
             try:
                 info = nifimod.inspect(nifimod.NiFi(rep.nifi_api, user, pw, verify=ca),
-                                       cfg.instance, cfg.parameter_context)
+                                       cfg.instance, cfg.parameter_context, cfg.optional_flows)
                 rep.add("nifi context", OK if info["context"] else TODO,
                         cfg.parameter_context + ("" if info["context"] else " missing; run create --yes"))
                 g = info["groups"]
@@ -511,11 +511,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         if rep.blocked:
             print("\nNot creating anything: fix the FAIL rows first.")
             return 1
+        import nifi as nifimod
         print("\nPlan:")
         for h in rep.planned_hubs:
             print(f"  create Data Hub {h['name']}  <- '{h['definition']}'  (billable)")
         print(f"  ensure topics {cfg.topic} and {cfg.alerts_topic}, table {cfg.lake_catalog}.{cfg.database}.{cfg.table}, "
-              f"NiFi context {cfg.parameter_context} + 6 flows"
+              f"NiFi context {cfg.parameter_context} + "
+              f"{len(nifimod.load_flows(cfg.instance, cfg.parameter_context, cfg.optional_flows))} flows"
               + ("" if args.no_start else " (started once Kafka is up)"))
         print(f"  ensure SSB project {cfg.ssb_project}, Flink jobs {cfg.flink_job} and {cfg.detections_job}")
         if not args.yes:
