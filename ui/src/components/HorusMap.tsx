@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback, memo } from 'react';
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import {
   basemapStyleUrl,
@@ -175,6 +175,8 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
 
     const styleUrl = basemapStyleUrl();
 
+    // MapLibre 6: load the worker Horus serves itself (tools/prepare-map-worker.mjs).
+    maplibregl.setWorkerUrl(`/vendor/maplibre/${maplibregl.getVersion()}/maplibre-gl-worker.mjs`);
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: styleUrl,
