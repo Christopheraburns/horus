@@ -10,8 +10,9 @@
  * Mirrors src/app/api/weather/route.ts (EONET branch) and the volcano block of
  * src/app/api/fires/route.ts.
  *
- * NOTE (CFM/Groovy): use f['key'] access everywhere — .properties resolves to the
- * bean accessor on older Groovy (the bug that nulled earthquake magnitudes).
+ * NOTE (CFM/Groovy): use f['key'] access, except for a key named "properties": read
+ * that with .get('properties'). Both .properties and ['properties'] can resolve to the
+ * bean accessor in NiFi (it nulled earthquake magnitudes, then NWS alert fields).
  */
 import org.apache.commons.io.IOUtils
 import groovy.json.JsonSlurper

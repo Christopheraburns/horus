@@ -8,8 +8,8 @@
  * and MODIS (brightness) headers, samples down to ~MAX_POINTS rows to match the
  * direct-API behavior, rounds coords to 3 decimals.
  *
- * NOTE (CFM/Groovy): always use explicit map key access — f['properties'] style —
- * never .properties, which older Groovy resolves to the bean accessor.
+ * NOTE (CFM/Groovy): read a JSON key named "properties" with .get('properties');
+ * both .properties and ['properties'] can resolve to the bean accessor in NiFi.
  */
 import org.apache.commons.io.IOUtils
 import groovy.json.JsonOutput

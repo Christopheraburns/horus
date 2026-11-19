@@ -6,6 +6,11 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 mkdir -p out
+# A JSON key named "properties" must be read with .get('properties'): on the platform's
+# NiFi, x.properties and x['properties'] returned bean properties (NWS lost every field).
+if grep -nE "\[['\"]properties['\"]\]|[a-zA-Z_]\.properties\b" ../scripts/*.groovy | grep -vE '^[^:]+:[0-9]+:\s*(//|\*)'; then
+  echo "FAIL: read 'properties' with .get('properties') (see above)"; exit 1
+fi
 cases=(
   "earthquakes-usgs usgs.json"
   "fires-firms firms.csv invokehttp.request.url=https://firms.modaps.eosdis.nasa.gov/x/VIIRS_SNPP_NRT"

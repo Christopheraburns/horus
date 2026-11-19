@@ -12,7 +12,8 @@
  * Moderate->medium / else low severity.
  *
  * NOTE (CFM/Groovy): NWS GeoJSON features have a "properties" key — ALWAYS use
- * f['properties'], never f.properties (bean-accessor trap on older Groovy).
+ * f.get('properties'): both f.properties and f['properties'] can resolve to the
+ * map's bean properties in NiFi's Groovy (seen on CFM, 2026-11-19).
  */
 import org.apache.commons.io.IOUtils
 import groovy.json.JsonSlurper
@@ -78,7 +79,9 @@ def normalizeSeverity = { String s ->
 }
 
 (data['features'] ?: []).each { f ->
-    def props = f['properties'] ?: [:]           // explicit key access — see header note
+    // Map.get, not f['properties']: on the platform's NiFi the subscript returned the
+    // map's bean properties, so every alert lost its headline, times and area.
+    def props = (f instanceof Map ? f.get('properties') : null) ?: [:]
     def pt = repPoint(f['geometry'] as Map)
     if (pt == null) return
     def (lat, lng) = pt
