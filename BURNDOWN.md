@@ -244,6 +244,26 @@ display, a fused view and geofences are discussed but not yet planned.
 | 15.6 | Popup LAST UPDATE from the report's own time, not when the gateway received it (a 50-minute-old hormuz.now report shows as fresh). Keep the gateway's TTL on receipt time so lakehouse replay ages as before (10.2) | A delayed report shows its true age | 2 | Todo |
 | 15.7 | Licence: hormuz.now's own data is CC BY 4.0, but its positions come from an unnamed tracker's public map tiles; confirm the upstream rights before customer use (as 9.5 for OpenSky) | Decision recorded | – | Todo |
 
+## 16. Lake schema v2 (do before section 8)
+
+The events table today has no partitioning, no maintenance (about 1,300 small
+files a day), and keeps altitude, speed, name, category and marking only inside
+`payload`. Measured 2026-11-19: 11.2 M rows, 2.7 GB, 2,559 files, about 670 bytes
+per row, almost all of it `payload`. Rebuild it now, while it is small and before
+the ontology binds to it. The table stays one generic observations table: no
+resolved entity ids and no entity attributes (the ontology owns those); typed
+views per asset type come later from the Helios semantic model (O0b).
+
+| ID | Item | Done when | Est | Status |
+|---|---|---|---|---|
+| 16.1 | Schema v2, written down: `tile_z8` (Web Mercator tile at zoom 8, same formula in Flink and Trino); optional `geom_wkt` plus a bounding box for shapes; `alt_m`, `speed_mps`, `course_deg`, `heading_deg`; `display_name`, `asset_subtype`; `id_scheme`; `event_id` as `provider:originalId`; `obs_hash`; `classification`, `releasability`; `captured_at` as a timestamp. Table: partition by day of `event_time`, sort by `tile_z8` then time, zstd, Iceberg format v2 | Schema agreed and documented | 1 | Todo |
+| 16.2 | Apply it: `ssb/01_events_iceberg_ddl.sql`, `provision/lake.py` and the Flink job `ssb/02_kafka_to_iceberg.sql` | A fresh `create --yes` builds the v2 table and the job fills every column | 3 | Todo |
+| 16.3 | aisstream `event_time` from the vessel's own report time (`MetaData.time_utc`), not NiFi's receive time | aisstream rows carry report times | 0.5 | Todo |
+| 16.4 | Gateway queries over the lake (history, replay, pattern of life) use the new columns instead of reading `payload` | Time Travel and Pattern of Life work on v2 | 1.5 | Todo |
+| 16.5 | Migrate with history: create v2, fill it from the old table in Trino (every new column derives from `payload`), swap, restart the Flink job from its Kafka offsets; keep the old table a week, then drop it | No rows lost; old table dropped | 1 | Todo |
+| 16.6 | Table maintenance job on a schedule: compact small files applying the sort, expire snapshots, remove orphan files | File count stays flat day to day | 2 | Todo |
+| 16.7 | Checks: the Flink and Trino tile formulas agree; a bounding-box query skips most files | Both shown in a test | 1 | Todo |
+
 ## Carried over
 
 | ID | Item | Status |
