@@ -68,7 +68,7 @@ metadata.
 | `captured` | warned if missing on imagery | toml | `YYYY-MM-DD` or `YYYY-MM-DD/YYYY-MM-DD`; Time Travel picks the imagery nearest the replay time (8.8) |
 | `bounds` | yes | metadata, or toml | `[west, south, east, north]` in degrees; the UI never requests tiles outside |
 | `minzoom`, `maxzoom` | yes | metadata, or toml | 0 to 24 |
-| `order` | | toml, else role and detail | Stacking, higher on top. Default: basemap 0, imagery 100, overlay 200, plus `maxzoom`, so a z14 region draws over the z10 world |
+| `order` | | toml, else role and detail | Stacking, higher on top. Default: basemap 0, imagery 100, overlay 200, plus `maxzoom`, so a z14 region draws over the z10 world. Equal orders: the larger area goes underneath |
 | `scheme`, `template` | `[url]` only | toml | `xyz` or `tms` with `{z}`, `{x}`, `{y}`; `wmts` with `{TileMatrix}`, `{TileRow}`, `{TileCol}` |
 | `credentials` | | toml | The name of an environment variable on the tile service holding the server's credentials. Such servers are reached through the tile service, so the browser never sees them (8.6) |
 
@@ -106,17 +106,18 @@ bottom to top:
 |---|---|---|---|---|
 | `horus-basemap` | basemap (vector) | 0–7 | world | 7 |
 | `horus-imagery-global` | imagery | 0–10 | world (to ±85.05°) | 110 |
-| `horus-imagery-bosporus` | imagery | 0–14 | 28, 40, 30, 42 | 114 |
-| `horus-imagery-channel` | imagery | 0–14 | −2, 49, 2, 52 | 114 |
-| `horus-imagery-crimea` | imagery | 0–14 | 32, 44, 37, 46 | 114 |
-| `horus-imagery-hampton-roads` | imagery | 0–14 | −77.5, 36, −75.5, 38 | 114 |
 | `horus-imagery-hormuz` | imagery | 0–14 | 52, 24, 58, 28 | 114 |
 | `horus-imagery-taiwan-strait` | imagery | 0–14 | 118, 22, 122, 26 | 114 |
+| `horus-imagery-channel` | imagery | 0–14 | −2, 49, 2, 52 | 114 |
+| `horus-imagery-crimea` | imagery | 0–14 | 32, 44, 37, 46 | 114 |
+| `horus-imagery-bosporus` | imagery | 0–14 | 28, 40, 30, 42 | 114 |
+| `horus-imagery-hampton-roads` | imagery | 0–14 | −77.5, 36, −75.5, 38 | 114 |
 
 All seven imagery files share one licence (CC BY 4.0), attribution, capture
 period (2021, annual composite) and marking (UNCLASSIFIED), set once in
 `[defaults.imagery]`. The regions don't overlap each other, so equal orders are
-fine; a region always draws above the global layer. Bounds and zooms here come
+fine (equal orders sort by area, larger underneath); a region always draws
+above the global layer. Bounds and zooms here come
 from the build scripts; the registry reads the real values from each file.
 
 ## Adding imagery

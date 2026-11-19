@@ -24,7 +24,7 @@
     "sources": {
       "openmaptiles": {
         "type": "vector",
-        "url": "mbtiles://{horus}"
+        "url": "mbtiles://{horus-basemap}"
       }
     },
     "sprite": "dark/sprite",

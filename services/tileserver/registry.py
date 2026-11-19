@@ -109,6 +109,10 @@ def _entry(id_: str, kind: str, meta: dict, s: dict) -> dict:
     }
 
 
+def _area(b: list) -> float:
+    return (b[2] - b[0]) * (b[3] - b[1])
+
+
 def validate(e: dict) -> tuple[list, list]:
     """(errors, warnings). An entry with errors is left out of the registry."""
     errors, warnings = [], []
@@ -201,7 +205,9 @@ def build(files: Iterable[tuple[str, str, dict]], cfg: dict, now: Optional[datet
             continue
         warnings += [(e["id"], w) for w in warns]
         kept.append(e)
-    kept.sort(key=lambda e: (e["order"], e["id"]))
+    # Ties (same role and maxzoom): the larger area goes underneath, so a regional layer
+    # still draws over a world layer of the same detail.
+    kept.sort(key=lambda e: (e["order"], -_area(e["bounds"]), e["id"]))
     return {"version": VERSION,
             "generated": (now or datetime.now(timezone.utc)).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "tilesets": kept, "skipped": skipped, "warnings": warnings}

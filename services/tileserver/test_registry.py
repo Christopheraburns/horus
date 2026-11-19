@@ -69,6 +69,12 @@ class Registry(unittest.TestCase):
         self.assertEqual((basemap["type"], basemap["order"], basemap["attribution"]),
                          ("vector", 7, "© OpenMapTiles © OpenStreetMap contributors"))
 
+    def test_equal_detail_larger_area_goes_under(self):
+        files = delivered()
+        files[0] = (files[0][0], files[0][1], dict(files[0][2], maxzoom="14"))   # a z14 world layer
+        ids = [e["id"] for e in registry.build(files, self.cfg, now=NOW)["tilesets"]]
+        self.assertEqual(ids[:2], ["horus-basemap", "horus-imagery-global"])
+
     def test_public_view_hides_paths(self):
         pub = registry.public(registry.build(delivered(), self.cfg, now=NOW))
         self.assertEqual(set(pub), {"version", "generated", "tilesets"})

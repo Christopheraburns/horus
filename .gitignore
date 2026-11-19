@@ -25,3 +25,8 @@ node_modules/
 ssb/test/out/
 # MapLibre worker, copied from node_modules at build (ui/tools/prepare-map-worker.mjs)
 ui/public/vendor/maplibre/
+
+# Tile server: written on each start by serve-tiles.py
+services/tileserver/config.generated.json
+services/tileserver/registry.generated.json
+services/tileserver/test/out/
