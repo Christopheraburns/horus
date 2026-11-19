@@ -174,7 +174,7 @@ Plan: [docs/ONTOLOGY_PLAN.md](docs/ONTOLOGY_PLAN.md). One stack: object types bo
 | ID | Item | Owner | Pts | Status |
 |---|---|---|---|---|
 | O0 | Settle the Helios/Horus split: the six open boundaries in the plan (reusable server, stream adapter, Postgres requirement, applications, domain packs, timing against Helios phases 9 and 10) | Both | – | Todo |
-| O0a | Entity identity rules: primary keys for Vessel (MMSI changes, IMO missing on small craft, names change) and Aircraft (ICAO hex can be reassigned); how detections' `asset_id` and entity resolution use them. Needed before 4.5 | Both | 1 h | Todo |
+| O0a | Entity identity rules: primary keys for Vessel (MMSI changes, IMO missing on small craft, names change) and Aircraft (ICAO hex can be reassigned); how detections' `asset_id` and entity resolution use them. Needed before 4.5. Real case: hormuz.now has 4 MMSIs shared by two different vessels (seen 2026-11-19), which merge into one entity today | Both | 1 h | Todo |
 | O0b | Helios semantic model of the Horus lake: run harvest, profile, propose and review against Horus's Trino and publish `horus_lake` (datasets, verified joins, first metrics such as dark hours). Can start now; every object type binds to it | Both | 4 h | Todo |
 | O1 | S0 Foundations: ids, branches and revisions in the Helios registry, schema, layering, audit, base types | Helios | 13 | Todo |
 | O2 | S1 Object types over Ossie: kinds, properties bound to fields, value types, metrics on types | Helios | 21 | Todo |
@@ -190,6 +190,24 @@ Plan: [docs/ONTOLOGY_PLAN.md](docs/ONTOLOGY_PLAN.md). One stack: object types bo
 | O12 | S11 Instance proposals and entity resolution (crawler records, SameAsAssertion, merge, MMSI/IMO/ICAO identity) | Helios | 13 | Todo |
 | O13 | S12 Horus host: service, Postgres, sign-in caller (BURNDOWN-DEPLOY C1, C2), Kafka adapter, Flink alerts as actions, object view and map popups | Horus | 13 | Todo |
 | O14 | S13 Seeds: OSINT pack and the Horus maritime/aviation extension; first Horus actions (triage alert, flag vessel, watch list from 6.4); Ask Horus `facts_for` (11.4–11.7) and the alerts layer (4.3) switched to object sets | Both | 13 | Todo |
+
+## 15. Multi-source feeds
+
+Several feeds of the same asset type, linked by identity and kept apart as
+observations: each feed's report is its own lake row (`event_id` is the feed's
+own id), and reports of the same vessel or aircraft share `asset_id` (MMSI, ICAO
+hex). The first pair is aisstream.io plus hormuz.now for vessels. Per-source
+display, a fused view and geofences are discussed but not yet planned.
+
+| ID | Item | Done when | Est | Status |
+|---|---|---|---|---|
+| 15.1 | hormuz.now vessel flow (`tools/build_hormuz_flow.py`, `nifi/scripts/vessels-hormuz.groovy`): full snapshot every 30 s with ETag caching, Strait of Hormuz and Gulf of Oman; keyed on MMSI like aisstream (no MMSI: `hormuz.now:<id>`); per-vessel local state so only moved vessels are sent, plus a 10-minute heartbeat (hormuz.now's `posAt` shifts every poll, so Flink's dedupe can't catch repeats); navigation aids and reports over 60 min dropped; CC BY 4.0 credit in the popup | Flow imported by `create --yes` and running (2026-11-19); transform tested on a 1,364-vessel snapshot | 4 | Done |
+| 15.2 | Gateway vessel merge across feeds: items carry `source`, `sources` (feed to last report time) and `flag`; an older report from another feed only fills missing fields and never moves a vessel back. Also fixed aisstream ship types (`shipType` was never read, so every vessel was "cargo") | Tested with a four-report aisstream/hormuz.now sequence | 2 | Done |
+| 15.3 | `tools/flowgen.py`: poll-flow rewiring shared by the OpenSky and hormuz.now builders; trigger set to TIMER_DRIVEN (rebuilding OpenSky from the now-CRON adsb.lol trigger gave an invalid schedule) | OpenSky flow regenerates byte-identical | 1 | Done |
+| 15.4 | Generated triggers start invalid: `flowgen` sets the GenerateFlowFile custom text to an empty string, which NiFi imports as "Set empty string" with unique FlowFiles on. Leave the property unset instead; regenerate the OpenSky and hormuz.now flows. Already-imported flows were fixed by hand (seen 2026-11-19) | A fresh import starts with no invalid processors | 0.5 | Todo |
+| 15.5 | Verify two-source vessels in the lake: vessels with both `aisstream.io` and `hormuz.now` rows under one `asset_id` (needs aisstream's Dubai-area receiver, silent since 2026-11-18); check the transform's state survives a NiFi restart without re-sending everything as moved | The query finds two-source vessels | 0.5 | Todo |
+| 15.6 | Popup LAST UPDATE from the report's own time, not when the gateway received it (a 50-minute-old hormuz.now report shows as fresh). Keep the gateway's TTL on receipt time so lakehouse replay ages as before (10.2) | A delayed report shows its true age | 2 | Todo |
+| 15.7 | Licence: hormuz.now's own data is CC BY 4.0, but its positions come from an unnamed tracker's public map tiles; confirm the upstream rights before customer use (as 9.5 for OpenSky) | Decision recorded | – | Todo |
 
 ## Carried over
 
