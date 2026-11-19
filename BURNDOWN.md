@@ -190,7 +190,7 @@ Catalog and refresh pattern: [docs/OFFLINE-DATA.md](docs/OFFLINE-DATA.md). Each 
 
 ## 13. Deployment model and security markings
 
-Design: [docs/DEPLOYMENT-MODEL.md](docs/DEPLOYMENT-MODEL.md). Boundary rule: no high-side service opens a connection to the public internet; public data arrives only through NiFi; private sensors on the enclave network may connect directly.
+Design: [docs/DEPLOYMENT-MODEL.md](docs/DEPLOYMENT-MODEL.md). Boundary rule: no high-side service opens a connection to the public internet; public data arrives through one controlled ingest gateway (NiFi in Horus); private sensors on the enclave network may connect directly; anything that writes the canonical envelope to Kafka can feed Horus.
 
 | ID | Item | Done when | Est | Status |
 |---|---|---|---|---|

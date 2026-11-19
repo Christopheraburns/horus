@@ -46,17 +46,34 @@ takes in plenty of data, but only by approved routes:
 ## The boundary rule
 
 > **No high-side Horus service opens a connection to the public internet.**
-> Public data arrives only through NiFi. Services may connect to approved
-> sensors and systems on the enclave's own network.
+> Public data arrives through one controlled ingest gateway; Horus includes
+> NiFi for this. Services may connect to approved sensors and systems on the
+> enclave's own network.
 
 The buffer is the internet boundary, not "everything outside Horus". A
 customer's own cameras feeding the media server directly is fine. The same
-media server pulling a public traffic camera is not; that goes through NiFi.
+media server pulling a public traffic camera is not; that goes through the
+ingest gateway.
 
-The same rule in a connected deployment: everything public still comes in
-through NiFi, so moving to an air-gapped site only means changing NiFi
+The same rule in a connected deployment: Horus's public feeds still come in
+through its NiFi flows, so moving to an air-gapped site only means changing NiFi
 parameters (a public URL becomes an internal mirror or a diode drop folder).
 No service code changes.
+
+## What feeds Horus
+
+Horus's contract with its sources is **a Kafka topic and the canonical event
+envelope**, not NiFi. Flink, the lake and the gateway only ever read events
+from Kafka, so anything that writes valid events to the topic is a first-class
+source: Kafka Connect, a customer's existing Kafka pipelines, a sensor that
+publishes to Kafka natively, or a bridge from another message bus.
+
+NiFi is the ingest toolkit Horus includes: hundreds of connectors, provenance
+on every record, back-pressure, and the two-tier hand-off across a
+cross-domain solution described above. Every Horus feed ships as a NiFi flow.
+A customer can keep those, replace any of them, or add their own producers
+beside them. The boundary rule applies to whichever component fetches from the
+internet.
 
 ## Where each component sits
 
@@ -64,7 +81,8 @@ No service code changes.
 |---|---|---|---|
 | Low-side NiFi | Low | Public APIs and sites | Collects, filters, scans and packages. Only needed in a cross-domain deployment; in a connected one, the single NiFi does both jobs. |
 | CDS (diode or guard) | Between | Low-side drop folder to high-side pickup folder | Customer's equipment. In the demo, a simulated hand-off (13.2). |
-| High-side NiFi | High | CDS pickup folder, internal mirrors, private sensors | The only ingest point. Every flow's source URL is a parameter. |
+| High-side NiFi | High | CDS pickup folder, internal mirrors, private sensors | The ingest toolkit Horus includes; every Horus feed is a NiFi flow, and every flow's source URL is a parameter. |
+| Other producers | High | Kafka | Optional. Anything that writes the canonical envelope to the events topic, such as Kafka Connect or a customer's existing pipeline. |
 | Kafka, Flink, Iceberg, Trino | High | Internal only | Unchanged. |
 | Gateway, intel resolver, Memgraph, tile server, UI | High | Internal only | AIRGAP.md lists the internet calls that remain. |
 | LLM (Mistral on-prem) | High | Internal only | The demo premise. |
