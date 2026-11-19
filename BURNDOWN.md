@@ -204,27 +204,27 @@ Design: [docs/DEPLOYMENT-MODEL.md](docs/DEPLOYMENT-MODEL.md). Boundary rule: no 
 
 ## 14. Ontology (Helios semantic models plus an operational ontology)
 
-Plan: [docs/ONTOLOGY_PLAN.md](docs/ONTOLOGY_PLAN.md). One stack: object types bound to Helios (Ossie) datasets and metrics; entities indexed and editable, observations read in place from Iceberg; actions as the only write path; policies that only narrow what Ranger allows; Flink results as machine-actor actions. Most work happens in the Helios repo, with Horus as the first host; the split is still being settled (the plan's "Helios or Horus" section). Estimates here are the plan's **points** (220 total), not hours, except O0a and O0b, which are hours. Recommended start: O0b, then O0a, then 4.5 (entity tables): all three help Horus before any ontology code exists. The plan moves to the Helios repo when work starts.
+Plan: [docs/ONTOLOGY_PLAN.md](docs/ONTOLOGY_PLAN.md). One stack: object types bound to Helios (Ossie) datasets and metrics; entities indexed and editable, observations read in place from Iceberg; actions as the only write path; policies that only narrow what Ranger allows; Flink results as machine-actor actions. The design is domain-neutral (any Helios host, for example a car manufacturer; a manufacturing test pack checks it). Most work happens in the Helios repo, with Horus as the first host; the split is still being settled (the plan's "Helios or Horus" section). Estimates here are the plan's **points** (245 total), not hours, except O0a and O0b, which are hours. Recommended start: O0b, then O0a, then 4.5 (entity tables): all three help Horus before any ontology code exists. The plan moves to the Helios repo when work starts.
 
 | ID | Item | Owner | Pts | Status |
 |---|---|---|---|---|
-| O0 | Settle the Helios/Horus split: the six open boundaries in the plan (reusable server, stream adapter, Postgres requirement, applications, domain packs, timing against Helios phases 9 and 10) | Both | – | Todo |
-| O0a | Entity identity rules: primary keys for Vessel (MMSI changes, IMO missing on small craft, names change) and Aircraft (ICAO hex can be reassigned); how detections' `asset_id` and entity resolution use them. Needed before 4.5. Real case: hormuz.now has 4 MMSIs shared by two different vessels (seen 2026-11-19), which merge into one entity today | Both | 1 h | Todo |
+| O0 | Settle the Helios/Horus split: the four open boundaries in the plan (Postgres requirement, applications, domain packs, timing against Helios phases 9 and 10). Decided 2026-11-19: a reusable reference server and the Kafka adapter both go in Helios | Both | – | Todo |
+| O0a | Entity identity rules, written as the plan's declared identity keys (scheme, strength, scope, validity) so no domain logic is hard-coded: primary keys for Vessel (MMSI changes, IMO missing on small craft, names change) and Aircraft (ICAO hex can be reassigned); how detections' `asset_id` and entity resolution use them. Needed before 4.5. Real case: hormuz.now has 4 MMSIs shared by two different vessels (seen 2026-11-19), which merge into one entity today | Both | 1 h | Todo |
 | O0b | Helios semantic model of the Horus lake: run harvest, profile, propose and review against Horus's Trino and publish `horus_lake` (datasets, verified joins, first metrics such as dark hours). Can start now; every object type binds to it | Both | 4 h | Todo |
 | O1 | S0 Foundations: ids, branches and revisions in the Helios registry, schema, layering, audit, base types | Helios | 13 | Todo |
-| O2 | S1 Object types over Ossie: kinds, properties bound to fields, value types, metrics on types | Helios | 21 | Todo |
-| O3 | S2 Links and interfaces, plus `OntologyGraph`/LinkML generated for compatibility | Helios | 21 | Todo |
+| O2 | S1 Object types over Ossie: kinds, properties bound to fields, value types, metrics on types, identity keys, time-series observation types | Helios | 26 | Todo |
+| O3 | S2 Links and interfaces (core `Actor`, `Located` with containment, `Occurrence`), plus `OntologyGraph`/LinkML generated for compatibility | Helios | 23 | Todo |
 | O4 | S3 Proposals and review for object types and links | Helios | 13 | Todo |
 | O5 | S4 Entity storage: indexer, upserts, edit log, merge, logs copied to Iceberg | Helios | 21 | Todo |
-| O6 | S5 Object sets, observations compiled through Helios as the caller | Helios | 21 | Todo |
-| O7 | S6 Actions, including machine actors and proposal-only actions; absorbs 4.4 (analyst writeback) | Helios | 21 | Todo |
+| O6 | S5 Object sets, observations compiled through Helios as the caller; deep `traverse` and `within` | Helios | 25 | Todo |
+| O7 | S6 Actions, including machine actors, proposal-only actions and state machines; absorbs 4.4 (analyst writeback) | Helios | 24 | Todo |
 | O8 | S7 Functions (runner process in Horus) | Both | 13 | Todo |
 | O9 | S8 Governance, including policies compiled to Ranger | Helios | 16 | Todo |
-| O10 | S9 Side effects and commit stream (Kafka adapter in Horus) | Both | 8 | Todo |
-| O11 | S10 Ontology tools (Helios) and HTTP API (Horus) | Both | 13 | Todo |
-| O12 | S11 Instance proposals and entity resolution (crawler records, SameAsAssertion, merge, MMSI/IMO/ICAO identity) | Helios | 13 | Todo |
-| O13 | S12 Horus host: service, Postgres, sign-in caller (BURNDOWN-DEPLOY C1, C2), Kafka adapter, Flink alerts as actions, object view and map popups | Horus | 13 | Todo |
-| O14 | S13 Seeds: OSINT pack and the Horus maritime/aviation extension; first Horus actions (triage alert, flag vessel, watch list from 6.4); Ask Horus `facts_for` (11.4–11.7) and the alerts layer (4.3) switched to object sets | Both | 13 | Todo |
+| O10 | S9 Side effects, commit stream and the Kafka adapter (now in Helios) | Helios | 11 | Todo |
+| O11 | S10 Ontology tools and the `helios-ontology-server` reference server; each host plugs in sign-in | Helios | 16 | Todo |
+| O12 | S11 Instance proposals and entity resolution (crawler records, SameAsAssertion, merge, resolution driven by declared identity keys) | Helios | 15 | Todo |
+| O13 | S12 Horus host: reference server deployed, Postgres, sign-in caller (BURNDOWN-DEPLOY C1, C2), Helios Kafka adapter wired to Horus topics, Flink alerts as actions, object view and map popups | Horus | 11 | Todo |
+| O14 | S13 Seeds: OSINT pack, the Horus maritime/aviation extension, and the manufacturing test pack (Helios, proves the core is domain-neutral); first Horus actions (triage alert, flag vessel, watch list from 6.4); Ask Horus `facts_for` (11.4–11.7) and the alerts layer (4.3) switched to object sets | Both | 18 | Todo |
 
 ## 15. Multi-source feeds
 

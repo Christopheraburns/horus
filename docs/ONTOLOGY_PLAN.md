@@ -11,7 +11,9 @@ Palantir Foundry's Ontology is a **reference** for the operational half: its doc
 
 The work is expected to happen mostly in the Helios repo, with Horus as the first host. Which pieces belong in Helios and which in Horus is not settled; [Helios or Horus](#helios-or-horus) proposes a split and lists the boundaries still to decide.
 
-Points are relative engineering weight, not calendar time. The plan is 14 sprints and 220 points.
+**Domain-neutral by design.** Horus is the first host, not the only one. The same ontology and Helios should serve unrelated projects, for example a car manufacturer managing plants, lines, machines, parts, lots and vehicles. Helios holds the mechanics; everything domain-specific lives in packs and host extensions; identity, location and time are declared in the definition rather than written into code. A manufacturing test pack ([Seeds](#manufacturing-test-pack)) checks this: if modelling a factory needs a change to the core, the core was too Horus-shaped.
+
+Points are relative engineering weight, not calendar time. The plan is 14 sprints and 245 points.
 
 ## Contents
 
@@ -76,7 +78,7 @@ flowchart TB
 
 | Layer | Answers | Built from |
 |---|---|---|
-| Applications and agents | Show, explain, act | Horus UI, object explorer, MCP tools for Mistral, Prime Agent |
+| Applications and agents | Show, explain, act | Each host's applications (in Horus: the map, object views, MCP tools for Mistral, the Prime Agent) |
 | Ontology | What things exist, how they relate, who may change or see them | This plan |
 | Semantic model | What the data means; how a number is computed | Helios (Ossie format), proposed from the warehouse and reviewed by a person |
 | Physical | Where the data is | Iceberg tables, Kafka topics, Postgres, Memgraph |
@@ -100,14 +102,16 @@ Later sprints must not break these.
 11. **Machines propose; people or criteria decide.** Anything a model, crawler or detection creates (an object type, a link, an identity match, an edit) carries a confidence and its evidence, and lands through review or through an action whose criteria accept it. This is Helios's "propose, don't decide" applied to instances.
 12. **Layers only add leaves.** A domain pack imports the core; a customer extension imports a pack; neither redefines what it imports. This is the guarantee Helios's ontology layering already makes.
 13. **Notifications render from the state before the edit and send after the commit.** A before-webhook that fails aborts the action; an after-webhook that fails is logged for retry and does not roll back.
+14. **Helios code never names a domain.** No vessel, MMSI, VIN or position report appears in Helios code. Domain things live in packs; identity keys, location and time are declared on object types, and the mechanics read the declarations.
 
 ## Two kinds of object: entities and observations
 
-This is the main departure from the reference. Foundry indexes every object. Horus writes millions of position reports a day; indexing them would copy the lake into Postgres and lose Iceberg's history and Ranger's policies on the way.
+This is the main departure from the reference. Foundry indexes every object. Horus writes millions of position reports a day, and a factory writes millions of sensor readings; indexing them would copy the lake into Postgres and lose Iceberg's history and Ranger's policies on the way.
 
 | | Entity | Observation |
 |---|---|---|
-| Examples | Vessel, Aircraft, Organization, Port, Alert, Encounter, Person, Document | Position report, AIS static message, camera frame, weather reading |
+| Examples (Horus) | Vessel, Aircraft, Organization, Port, Alert, Encounter, Person, Document | Position report, AIS static message, camera frame, weather reading |
+| Examples (a car plant) | Plant, Line, Station, Machine, Part, Lot, Vehicle, Supplier, WorkOrder | Sensor reading, torque value, inspection result, machine state change |
 | Volume | Thousands to millions | Millions per day |
 | Stored | Entity index (Postgres) built from an Ossie dataset, plus the edit log | Only in its Ossie dataset (Iceberg) |
 | Edits | Yes, through actions | No. Analysts annotate an observation by creating an entity (a Note, a Flag) linked to it |
@@ -200,7 +204,24 @@ Base types the core honours:
 | Geopoint | No | Yes | `latitude,longitude` |
 | Geoshape | No | No | GeoJSON |
 
-Reserved, implemented after the core: vector, struct, media reference, time series, attachment, cipher, marking.
+Reserved, implemented after the core: vector, struct, media reference, time series as a property, attachment, cipher, marking. (Time-series *observation types* are in the core; see below.)
+
+### Identity keys
+
+An entity type declares how its instances are recognised, so entity resolution and the entity index need no domain code:
+
+| Field | Meaning | Horus example | Car plant example |
+|---|---|---|---|
+| `scheme` | The kind of identifier, unique per space | `mmsi`, `imo`, `icao24` | `vin`, `partSerial`, `supplierLot` |
+| `strength` | `strong`: a match links on its own; `weak`: a match only proposes | MMSI and IMO strong; name weak | VIN and serial strong; supplier name weak |
+| `scope` | Where the value is unique | global | per supplier for a lot number |
+| `validity` | Whether a value can move to another instance over time | MMSI can be reassigned | serials never move |
+
+The primary key is the entity's own stable id; identity keys are how observations and outside records find it. They are stored in the entity index as identifier rows (entity, scheme, value, valid from and to, source, confidence), which is the crosswalk entity resolution reads and writes.
+
+### Time-series observation types
+
+An observation type can declare itself a series: a series key (for example machine and channel), a sample-time property, value properties with units, and the default downsampling for each value (mean, min, max, last). Object sets over a series accept a time bucket and return the downsampled values, compiled through Helios like any other observation query. Sensor channels are most of a factory's data, so this is core, not an extra; position reports are a series too (keyed by asset).
 
 ### Link types
 
@@ -218,15 +239,26 @@ Several link types may connect the same pair, and a type may link to itself.
 
 An interface is a shape (properties, link constraints, action constraints) with no data and no instances. Object types implement it; an interface can extend several others. A workflow written for `Actor` keeps working when a new type implements `Actor`, which matters in intelligence work, where new kinds of actor keep appearing. Interfaces are real in the definition, in object sets, in actions and in the generated tools.
 
+The core defines only interfaces every domain needs:
+
+| Core interface | Shape | Horus | Car plant |
+|---|---|---|---|
+| `Actor` | displayName | Person, Organization | Supplier, Operator |
+| `Located` | optional `position` (geopoint), optional local position in a named frame, optional `containedIn` link to another `Located` | Vessel by geopoint; Port | Station `containedIn` Line `containedIn` Hall `containedIn` Plant |
+| `Occurrence` | a time or an interval | Alert, Encounter | QualityEvent, Downtime |
+
+`Located` does not require latitude and longitude: a factory locates things by containment, often in local coordinates, and a map position is optional. Interfaces specific to a domain (`Evidence` and `Observable` for intelligence work) live in that domain's pack.
+
 ### Layers and packs
 
 The definition uses the layering Helios already applies to its LinkML ontology:
 
 ```text
-core            shared properties, value types, base interfaces (Actor, Place, Evidence, Observable)
-packs/osint     Person, Organization, Document, Claim, Source, Affiliation, SameAsAssertion ...
+core            shared properties, value types, base interfaces (Actor, Located, Occurrence)
+packs/osint     Evidence, Observable; Person, Organization, Document, Claim, Source, Affiliation, SameAsAssertion ...
 packs/maritime  Vessel, Port, PortCall, Encounter, PositionReport ...
 packs/aviation  Aircraft, Airport, Flight ...
+packs/manufacturing  Plant, Line, Machine, Part, Lot, Vehicle, WorkOrder ... (test pack)
 <host>          a customer's or a demo's own extension
 ```
 
@@ -250,8 +282,12 @@ objectTypes:
     displayName: Vessel
     primaryKey: vesselId
     titleProperty: displayName
-    implements: [trackedAsset]
+    implements: [located]
     dataset: { model: horus_lake, dataset: vessels }
+    identityKeys:
+      - { scheme: mmsi, property: mmsi, strength: strong, validity: reassignable }
+      - { scheme: imo, property: imo, strength: strong }
+      - { scheme: vesselName, property: displayName, strength: weak }
     properties:
       - { apiName: vesselId, field: vessel_id }
       - { apiName: displayName, sharedProperty: displayName, field: name }
@@ -311,6 +347,7 @@ type ObjectSet =
   | { type: "filter"; objectSet: ObjectSet; where: Where }
   | { type: "searchAround"; objectSet: ObjectSet; linkSide: string }
   | { type: "timeRange"; objectSet: ObjectSet; from: string; to: string }
+  | { type: "traverse"; objectSet: ObjectSet; linkSide: string; depth: number | "all"; asOf?: string }
   | { type: "union" | "intersect" | "subtract"; objectSets: ObjectSet[] };
 
 type Where =
@@ -319,11 +356,14 @@ type Where =
   | { op: "contains"; property: string; value: string }
   | { op: "arrayContains"; property: string; value: unknown }
   | { op: "withinBBox"; property: string; minLat: number; minLon: number; maxLat: number; maxLon: number }
+  | { op: "within"; container: ObjectSet }   // containedIn, followed transitively
   | { op: "and" | "or"; clauses: Where[] }
   | { op: "not"; clause: Where };
 ```
 
 The same structure exists as Python types; the TypeScript is for the client.
+
+`searchAround` takes one hop. `traverse` follows one link side repeatedly: deep genealogy ("which vehicles contain parts from lot L", through many levels of assembly), ownership chains, containment. `asOf` reads object-backed links whose dates cover that moment, so an as-built genealogy or a past ownership chain can be queried. Traversal runs on the graph view generated from the definition (Memgraph in Horus) or as recursive SQL; `depth: "all"` needs an `asOf` or a cycle-safe link type.
 
 Execution pages, sorts, projects and aggregates. Count, sum, min and max work on any set; anything more is an Ossie metric bound to the type, so the number is defined once. An observation set without a `timeRange` is rejected. Search-around walks whichever backing the link has, across the entity/observation boundary. An interface set is the union of its implementers, with the interface's properties.
 
@@ -334,6 +374,8 @@ Execution pages, sorts, projects and aggregates. Count, sum, min and max work on
 - The search index updates after the action commits, not inside the function.
 - When a dataset is replaced, the change offers two migrations: drop edits, or move them.
 - The edit log and the action log are copied to Iceberg on a schedule, so Time Travel covers analyst edits as well as data. An optional materialization writes the latest merged snapshot of a type to Iceberg for downstream jobs.
+
+The entity index has no domain columns: an entity row (type, primary key, properties), the identifier rows from each type's identity keys, and links. The same tables hold vessels and vehicles.
 
 Postgres holds the definition, the edit log and the entity index (btree and trigram search behind an index interface, so a later search engine changes nothing above it). This fits Helios's pluggable-storage decision: the registry and the edit log go through SQLAlchemy; the entity index needs Postgres features, with SQLite and full-text search as the laptop fallback.
 
@@ -352,6 +394,10 @@ Submission criteria are conditions on the current user and the parameters, combi
 The action log stores the actor, the parameters, the edit batch, the start time and the commit time.
 
 **Machine actors.** A detection job or a crawler submits actions as a named service actor, with criteria written for that actor. An action type can be marked **proposal-only** for machine actors: the submission is stored as a pending proposal, with its confidence and evidence, and an analyst accepts or rejects it (rule 11).
+
+### State machines
+
+An object type can declare a status property with its states and allowed transitions, each bound to an action type. The definition check rejects any other action that writes that property, so a status changes only through a declared transition. Examples: Alert (new, triaged, closed), WorkOrder (released, in progress, complete), Lot (on hold, released, quarantined). Object views show the transitions available from the current state.
 
 ### Functions
 
@@ -392,12 +438,12 @@ What this does not do: carry policies onto copies outside the lake (rule 9), or 
 
 Neither Helios nor the reference has streams; Horus is built on them.
 
-- **Entity upserts.** A stream adapter reads a Kafka topic of entity changes (for example, vessel static data from AIS) and upserts the entity index. These are base-row changes, not edits; analyst edits on top survive them under the merge rules.
+- **Entity upserts.** A stream adapter reads a Kafka topic of entity changes (vessel static data from AIS; a machine or lot record from a factory system) and upserts the entity index, resolving each record through the type's declared identity keys. These are base-row changes, not edits; analyst edits on top survive them under the merge rules.
 - **Detections as actions.** Flink results (alerts, encounters) become action submissions by a machine actor: an `Alert` is created, or an identity match is proposed for review. The rules, criteria and log are the same as for a person.
 - **Commit stream.** Every committed action is published to a topic. Subscriptions to a saved object set, live map updates and external consumers read it. The action log stays the source of truth; the topic is a feed.
 - **Observations need nothing new.** They land in Iceberg through the existing NiFi, Kafka and Flink pipeline and are read in place.
 
-The adapter interface lives in the library; the Kafka implementation and its wiring belong to the host (see the split below).
+The Kafka adapter lives in Helios, so every host gets the same one; the host supplies topic names, field mappings and its Flink jobs (see the split below).
 
 ## Proposals, review and entity resolution
 
@@ -417,7 +463,7 @@ The reviewer accepts, edits or rejects each one, exactly as for an Ossie model. 
 - crawler output enters the ontology through actions: Document, Mention and Claim objects, with links to the entities they mention;
 - a `PossiblySameAs` verdict becomes a SameAsAssertion object, created by a proposal-only action, with its confidence, tier and evidence;
 - accepting the assertion runs a merge, which is a function-backed action;
-- Horus uses the same path for structured identity: an MMSI that changes name, an IMO seen with two MMSIs, an aircraft re-registered.
+- structured identity uses the same path, driven by declared identity keys rather than per-domain code: a strong key that matches links; a new strong key creates a provisional entity; weak evidence only proposes; two strong keys that disagree are flagged. Horus's cases (an MMSI that changes name, an IMO seen with two MMSIs, an aircraft re-registered) and a factory's (a serial seen on two vehicles, one supplier under three names) are the same mechanism.
 
 ## Serving: tools, API and applications
 
@@ -443,17 +489,20 @@ A starting split, to iterate on. The rule of thumb is Helios's own: libraries in
 | Ranger and Atlas compilation, Impala and Trino specifics | Helios: helios-cloudera | Platform plugin, as today |
 | Ontology tools | Helios: helios-serve, helios-mcp | Same registry as the existing tools |
 | OSINT pack | Helios: packs | Shared by any intelligence host |
-| HTTP API, sign-in, caller attributes | Horus | Helios has no server and no identity by decision |
+| Manufacturing test pack | Helios: packs (tests only) | Proves the core is domain-neutral |
+| Reference ontology server: HTTP API over object sets, objects, actions and the definition, with OpenAPI | Helios: `helios-ontology-server`, a reference host outside the libraries (like Daedalus) | Every host needs the same API; decided 2026-11-19 |
+| Sign-in and caller attributes | Each host, plugged into the reference server | Helios has no identity by decision |
 | Postgres hosting, service deployment | Horus | Host owns deployment |
-| Kafka stream adapter, Flink-to-action wiring | Horus, behind a Helios interface | Uses the host's topics and jobs |
+| Kafka stream adapter | Helios: helios-cloudera or a stream plugin | Any host with streams needs it; decided 2026-11-19 |
+| Topic names, mappings, Flink jobs and their wiring to actions | Horus | The host's own pipeline |
 | Function runner process | Horus | Host owns processes and sandboxing |
 | Object view, explorer, map integration | Horus | Applications |
 | Maritime and aviation packs, the Horus extension | Horus at first; packs may move to Helios | Domain |
 
 **Boundaries to decide together:**
 
-1. **Is there a reusable server?** Helios decided against shipping one. If several hosts need the same HTTP API, a small `helios-ontology-server` reference host (outside the libraries, like Daedalus) may be better than each host writing it.
-2. **Stream adapter.** A generic Kafka adapter could live in helios-cloudera or a new plugin, with Horus supplying only topic names and mappings.
+1. **Is there a reusable server?** *Decided 2026-11-19: yes.* A `helios-ontology-server` reference host, outside the libraries like Daedalus, so a second host (a car manufacturer, say) does not rewrite the API. Hosts plug in sign-in and caller attributes.
+2. **Stream adapter.** *Decided 2026-11-19: Helios.* The Kafka adapter lives in helios-cloudera or a new plugin; Horus supplies topic names and mappings.
 3. **Postgres as a requirement.** Helios's storage is pluggable. Is the entity index allowed to require Postgres, with SQLite for laptops, or does it need an index plugin interface from day one?
 4. **Applications.** Is an object view generic enough to ship as a Helios example (like the existing viewer), with Horus embedding it, or is it Horus code?
 5. **Domain packs.** Maritime and aviation could be Helios packs for other customers, or stay Horus's.
@@ -461,7 +510,7 @@ A starting split, to iterate on. The rule of thumb is Helios's own: libraries in
 
 ## Seeds
 
-Two seeds prove the design. Each is ordinary definition YAML, loaded through review.
+Three seeds prove the design. Each is ordinary definition YAML, loaded through review.
 
 ### OSINT pack
 
@@ -469,10 +518,10 @@ The first pack, from the reference model.
 
 | Interface | Shared shape | Implemented by |
 |---|---|---|
-| Actor | displayName, confidence | Person, Organization |
-| Place | displayName, position | Location |
-| Evidence | displayName, url | Document |
-| Observable | value, confidence, firstSeen, lastSeen | Account, Domain, IpAddress |
+| Actor (core) | displayName, confidence | Person, Organization |
+| Located (core) | displayName, position | Location |
+| Evidence (this pack) | displayName, url | Document |
+| Observable (this pack) | value, confidence, firstSeen, lastSeen | Account, Domain, IpAddress |
 
 Also Event, Claim, Source, Affiliation (object-backed, with role, validFrom, validTo) and SameAsAssertion (object-backed, with confidence, tier, evidence, reviewer). Value types: confidence (0 to 1), url, email, handle, countryCode.
 
@@ -500,7 +549,7 @@ Built on the Horus lake and the `ref_*` tables ([OFFLINE-DATA.md](OFFLINE-DATA.m
 | Vessel | Entity | Vessel identities from AIS static data, with MMSI, IMO, name, flag |
 | Aircraft | Entity | ICAO hex, registration and type from the offline aircraft database |
 | Organization | Entity (implements Actor) | Operators and owners, sanctions lists, the Wikidata graph |
-| Port | Entity (implements Place) | World Port Index |
+| Port | Entity (implements Located) | World Port Index |
 | SanctionListing | Entity | `ref_sanctions` |
 | Alert | Entity | The alerts topic and its lake table; analysts triage it |
 | Encounter | Entity | Ship-to-ship detections; object-backed between two vessels |
@@ -511,6 +560,34 @@ Metrics: dark hours, port calls per month, encounters per vessel, alerts per are
 Actions: triage alert (status, assignee, note), flag vessel or aircraft, add to watchlist, confirm or reject an identity match, and create Alert (machine actor, from Flink).
 
 Consumers once it lands: Ask Horus tiers (burndown 11.4 to 11.7) read object sets instead of raw tables; the Prime Agent (section 5) works through the ontology tools; map popups open object views.
+
+### Manufacturing test pack
+
+A pack for a car plant, kept in Helios as a test with no application and a small synthetic dataset (DuckDB). Its job is to fail loudly if the core assumes intelligence work or a map.
+
+| Object type | Kind | Notes |
+|---|---|---|
+| Plant, Hall, Line, Station | Entity (implement Located) | Located by `containedIn`, no geopoint below Plant |
+| Machine, Tool | Entity | Machine `containedIn` Station |
+| Part | Entity | Identity key `partSerial` (strong, never moves) |
+| Lot | Entity | Identity key `supplierLot` (strong, scoped per supplier); state machine: on hold, released, quarantined |
+| Vehicle | Entity | Identity key `vin` (strong) |
+| Supplier | Entity (implements Actor) | Name as a weak key, so three spellings propose one supplier |
+| WorkOrder | Entity | State machine: released, in progress, complete |
+| QualityEvent | Entity (implements Occurrence) | Raised by people or a detection |
+| SensorReading | Observation, series | Series key: machine and channel; values with units |
+| Inspection | Observation | Result per part and station |
+
+Links: Part `fromLot` Lot; Lot `suppliedBy` Supplier; Installation (object-backed: part, vehicle or parent part, installed and removed times), which makes the as-built genealogy.
+
+Actions: quarantine lot, release lot, put machine into maintenance (proposal-only when a detection raises it), complete operation.
+
+The pack passes when, with no change to the core, it answers:
+
+1. Which vehicles contain parts from lot L, at any depth of assembly (`traverse` with `asOf`)?
+2. Which machines in Hall 2 ran above a temperature limit in the last hour (`within` plus a series bucket)?
+3. Quarantine lot L, and show the action log and the state change (state machine).
+4. Three supplier spellings become one proposed Supplier (weak identity keys, proposal-only).
 
 ## Sprints
 
@@ -526,8 +603,8 @@ flowchart LR
   s5 --> s6[S6 Actions]
   s6 --> s7[S7 Functions]
   s5 --> s8[S8 Governance]
-  s6 --> s9[S9 Side effects and commit stream]
-  s8 --> s10[S10 Tools and API]
+  s6 --> s9[S9 Side effects, commit stream, Kafka adapter]
+  s8 --> s10[S10 Tools and reference server]
   s7 --> s10
   s6 --> s11[S11 Proposals for instances and entity resolution]
   s10 --> s12[S12 Horus host]
@@ -539,29 +616,31 @@ flowchart LR
 
 | Sprint | Owner | Points | Remaining |
 |---|---|---:|---:|
-| Start | | 0 | 220 |
-| S0 Foundations | Helios | 13 | 207 |
-| S1 Object types over Ossie | Helios | 21 | 186 |
-| S2 Links and interfaces | Helios | 21 | 165 |
-| S3 Proposals and review for the definition | Helios | 13 | 152 |
-| S4 Entity storage | Helios | 21 | 131 |
-| S5 Object sets | Helios | 21 | 110 |
-| S6 Actions | Helios | 21 | 89 |
-| S7 Functions | Helios, runner in Horus | 13 | 76 |
-| S8 Governance | Helios | 16 | 60 |
-| S9 Side effects and commit stream | Helios, adapter in Horus | 8 | 52 |
-| S10 Tools and API | Helios tools, Horus API | 13 | 39 |
-| S11 Instance proposals and entity resolution | Helios | 13 | 26 |
-| S12 Horus host | Horus | 13 | 13 |
-| S13 Seeds | Both | 13 | 0 |
+| Start | | 0 | 245 |
+| S0 Foundations | Helios | 13 | 232 |
+| S1 Object types over Ossie | Helios | 26 | 206 |
+| S2 Links and interfaces | Helios | 23 | 183 |
+| S3 Proposals and review for the definition | Helios | 13 | 170 |
+| S4 Entity storage | Helios | 21 | 149 |
+| S5 Object sets | Helios | 25 | 124 |
+| S6 Actions | Helios | 24 | 100 |
+| S7 Functions | Helios, runner in Horus | 13 | 87 |
+| S8 Governance | Helios | 16 | 71 |
+| S9 Side effects, commit stream and Kafka adapter | Helios | 11 | 60 |
+| S10 Tools and reference server | Helios | 16 | 44 |
+| S11 Instance proposals and entity resolution | Helios | 15 | 29 |
+| S12 Horus host | Horus | 11 | 18 |
+| S13 Seeds | Both | 18 | 0 |
 
 | Layer | Sprints | Points |
 |---|---|---:|
-| Definition | S0–S3 | 68 |
-| Storage and query | S4–S5 | 42 |
-| Write path | S6, S7, S9 | 42 |
+| Definition | S0–S3 | 75 |
+| Storage and query | S4–S5 | 46 |
+| Write path | S6, S7, S9 | 48 |
 | Governance | S8 | 16 |
-| Serving, resolution, host, seeds | S10–S13 | 52 |
+| Serving, resolution, host, seeds | S10–S13 | 60 |
+
+The domain-neutral changes of 2026-11-19 added 25 points: identity keys and series types (S1), `Located` and containment (S2), `traverse` and `within` (S5), state machines (S6), the Kafka adapter moving into Helios (S9, and 2 fewer in S12), the reference server's sign-in interface (S10), resolution driven by identity keys (S11) and the manufacturing test pack (S13).
 
 ### S0 Foundations (13)
 
@@ -576,7 +655,7 @@ The definition exists and is versioned. Nothing can be queried yet.
 | 1 | Audit records through `AuditSink` |
 | 2 | Base type catalog and primary-key and title rules, including reserved types |
 
-### S1 Object types over Ossie (21)
+### S1 Object types over Ossie (26)
 
 | Points | Work |
 |---:|---|
@@ -586,8 +665,10 @@ The definition exists and is versioned. Nothing can be queried yet.
 | 3 | Shared properties |
 | 4 | Value types with constraints and versions |
 | 2 | Metrics bound to object types from Ossie metrics |
+| 2 | Identity keys on entity types: scheme, strength, scope, validity; stored as identifier rows |
+| 3 | Time-series observation types: series key, sample time, values with units, default downsampling |
 
-### S2 Links and interfaces (21)
+### S2 Links and interfaces (23)
 
 | Points | Work |
 |---:|---|
@@ -598,6 +679,7 @@ The definition exists and is versioned. Nothing can be queried yet.
 | 1 | Several links per pair; self-links |
 | 4 | Interfaces: extends, implements, conformance check |
 | 2 | Link and action constraints on interfaces |
+| 2 | Core interfaces `Actor`, `Located` (geopoint optional, local frame, `containedIn`) and `Occurrence` |
 | 2 | `OntologyGraph` and LinkML generated from the definition (compatibility with Helios's stable contracts) |
 
 ### S3 Proposals and review for the definition (13)
@@ -620,7 +702,7 @@ The definition exists and is versioned. Nothing can be queried yet.
 | 2 | Copy of the edit and action logs to Iceberg; optional materialization |
 | 2 | Dataset replacement: drop or move edits |
 
-### S5 Object sets (21)
+### S5 Object sets (25)
 
 | Points | Work |
 |---:|---|
@@ -630,8 +712,10 @@ The definition exists and is versioned. Nothing can be queried yet.
 | 3 | Search-around across all backings and across the entity/observation boundary |
 | 3 | Aggregations: count, sum, min, max, grouped; metrics through Ossie |
 | 2 | Sort, page, project |
+| 3 | `traverse` with depth and `asOf`, on the graph view or recursive SQL |
+| 1 | `within` over `containedIn`, transitive |
 
-### S6 Actions (21)
+### S6 Actions (24)
 
 | Points | Work |
 |---:|---|
@@ -641,6 +725,7 @@ The definition exists and is versioned. Nothing can be queried yet.
 | 4 | Submission criteria, operators and failure messages |
 | 2 | Machine actors and proposal-only action types |
 | 3 | Transactional apply and the action log |
+| 3 | State machines: states and transitions bound to action types; other writes to the status rejected |
 
 ### S7 Functions (13)
 
@@ -662,7 +747,7 @@ The definition exists and is versioned. Nothing can be queried yet.
 | 2 | Marking hook with an allow-all evaluator |
 | 1 | Policy test as a chosen user |
 
-### S9 Side effects and commit stream (8)
+### S9 Side effects, commit stream and Kafka adapter (11)
 
 | Points | Work |
 |---:|---|
@@ -670,48 +755,51 @@ The definition exists and is versioned. Nothing can be queried yet.
 | 2 | Notifications from pre-edit state, after commit |
 | 2 | Commit stream interface; usage counters |
 | 1 | Criteria test run that writes nothing |
+| 3 | Kafka adapter in Helios: entity upserts through identity keys; commit stream to a topic |
 
-### S10 Tools and API (13)
+### S10 Tools and reference server (16)
 
 | Points | Work |
 |---:|---|
 | 6 | Ontology tools in helios-serve; served by helios-mcp |
-| 5 | Host HTTP API over object sets, objects, actions and the definition; OpenAPI |
+| 5 | `helios-ontology-server`: HTTP API over object sets, objects, actions and the definition; OpenAPI |
+| 3 | Sign-in and caller-attribute interface that each host implements |
 | 2 | Typed client generated from OpenAPI for a chosen subset |
 
-### S11 Instance proposals and entity resolution (13)
+### S11 Instance proposals and entity resolution (15)
 
 | Points | Work |
 |---:|---|
 | 4 | Crawler records (entities, mentions, claims, evidence) loaded through actions |
 | 4 | SameAsAssertion from `PossiblySameAs`, proposal-only, with evidence |
 | 3 | Merge of two entities as a function-backed action |
-| 2 | Structured identity rules for Horus (MMSI, IMO, ICAO hex) proposing assertions |
+| 4 | Structured identity from declared identity keys: strong match links, new strong key creates a provisional entity, weak evidence proposes, conflicting strong keys are flagged |
 
-### S12 Horus host (13)
+### S12 Horus host (11)
 
 | Points | Work |
 |---:|---|
-| 3 | Ontology service as a Workbench Application; Postgres hosted; caller from sign-in (needs BURNDOWN-DEPLOY C1, C2) |
-| 3 | Kafka adapter: entity upserts; commit stream to a topic |
+| 3 | Reference server deployed as a Workbench Application; Postgres hosted; Horus sign-in plugged in (needs BURNDOWN-DEPLOY C1, C2) |
+| 1 | Helios Kafka adapter wired to Horus topics and mappings |
 | 2 | Flink alerts and encounters submitted as machine-actor actions |
 | 2 | Function runner process |
 | 3 | Object view and explorer; map popups open the object view |
 
-### S13 Seeds (13)
+### S13 Seeds (18)
 
 | Points | Work |
 |---:|---|
 | 5 | OSINT pack: interfaces, types, links, value types, actions; crawler records mapped |
 | 6 | Horus extension over the lake and `ref_*` tables, with its metrics and actions |
 | 2 | Ask Horus tier 1 reads an object set (Horus burndown 11.4) |
+| 5 | Manufacturing test pack with its synthetic dataset; the four acceptance questions pass with no core change |
 
 ## After the core
 
 | Increment | Adds | Why it waits |
 |---|---|---|
 | Visual definition editor | Building types, links and actions in a UI | Proposals and review cover the first release |
-| Temporal links | Query links by a valid interval | Object-backed links already store the dates |
+| Temporal links | Query any link by a valid interval | `traverse` with `asOf` covers object-backed links; other backings wait |
 | Admiralty codes | Reliability and credibility on Claim | A constraint on value types |
 | Corroboration | Claim-to-claim support and contradiction | Ordinary links once the seed has been used |
 | Markings | A real evaluator and exports that carry the marking | The hook exists; needs Atlas and Ranger tags (Horus 13.4 to 13.6) |
@@ -719,7 +807,7 @@ The definition exists and is versioned. Nothing can be queried yet.
 | Vectors | Vector type and nearest-neighbour on object sets | Search beyond Postgres |
 | Saved pages | Pages of object sets, charts and action buttons | The explorer and actions are their runtime |
 | Several datasets per type | More than one backing | One is enough for both seeds |
-| Rich types | Struct, media reference, time series as a property, cipher | Reserved in the catalog |
+| Rich types | Struct, media reference, time series as a property, cipher | Reserved in the catalog; series observation types cover sensor data in the core |
 | Derived properties | A query function registered as a property | Object views can call the function first |
 | Video objects | Camera segments as observations, with MISB/KLV footprints | Horus burndown 6.5 to 6.7 and 13.7 |
 
@@ -741,7 +829,7 @@ For readers who don't know Helios. Status from its decomposition burndown, 18 No
 | Index records: entities, mentions, relationships, claims, evidence | Input to the OSINT pack and entity resolution |
 | Crawler and resolver (`SameAs` / `PossiblySameAs`, tiers, evidence) | Entity resolution |
 
-What Helios does not have, and this plan adds: a write path (actions, functions, edit log), object identity and an entity index, typed links with backings, interfaces with constraints, object and property policies, streams.
+What Helios does not have, and this plan adds: a write path (actions, functions, edit log, state machines), object identity with declared identity keys and an entity index, typed links with backings and deep traversal, interfaces with constraints, object and property policies, streams, and a reference server.
 
 ## References
 
