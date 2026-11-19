@@ -1,10 +1,20 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // MapLibre 6 worker URL: see tools/maplibre-url-loader.cjs.
+  turbopack: {
+    rules: {
+      'maplibre-gl.mjs': {
+        loaders: [`${__dirname}/tools/maplibre-url-loader.cjs`],
+        as: '*.js',
+      },
+    },
+  },
   serverExternalPackages: ['ws'],
   transpilePackages: ['react-map-gl', 'mapbox-gl', 'maplibre-gl'],
   typescript: {
-    ignoreBuildErrors: true,
+    // Type errors fail the build (upstream #289): the backlog is at zero, so keep it there.
+    ignoreBuildErrors: false,
   },
   images: {
     remotePatterns: [
@@ -13,6 +23,11 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
+      // The worker path carries the MapLibre version, so its contents never change.
+      {
+        source: '/vendor/maplibre/:version/:file*',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
+      },
       {
         source: '/(.*)',
         headers: [

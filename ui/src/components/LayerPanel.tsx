@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plane, Satellite, Activity, Sun, AlertTriangle, Camera, Flame, Target,
   CloudLightning, Radiation, Tv, Anchor, Ship, Newspaper,
-  Network, Share2, Radio, Mountain
+  Network, Radio, Mountain
 } from 'lucide-react';
 
 interface LayerPanelProps {
@@ -13,32 +13,17 @@ interface LayerPanelProps {
   activeLayers: any;
   setActiveLayers: React.Dispatch<React.SetStateAction<any>>;
   isMobile?: boolean;
-  theme?: 'core' | 'ghost';
-  setTheme?: (theme: 'core' | 'ghost') => void;
   /** SOURCE: PIPELINE. Hides layers that need public map tiles (3D buildings). */
   pipelineMode?: boolean;
 }
 
-const getLayerGroups = (theme: 'core' | 'ghost') => {
-  const isGhost = theme === 'ghost';
-  const phantomPurple = '#B388FF';
-  const ghostPriv = '#CE93D8';
-  const ghostGov = '#D500F9';
-
-  const flightCom = isGhost ? phantomPurple : '#00E5FF';
-  const flightPriv = isGhost ? ghostPriv : '#FFD700';
-  const flightGov = isGhost ? ghostGov : '#FF9500';
+const getLayerGroups = () => {
+  const flightCom = '#00E5FF';
+  const flightPriv = '#FFD700';
+  const flightGov = '#FF9500';
   const flightMil = '#FF0000';
 
   return [
-  {
-    label: 'SDK',
-    fullLabel: 'HORUS SDK',
-    color: '#1565C0',
-    layers: [
-      { key: 'sdk_ransomware', label: 'Ransomware Feed', icon: AlertTriangle, color: '#D32F2F', dataKey: 'sdk_entities' },
-    ],
-  },
   {
     label: 'AVIATION',
     fullLabel: 'AVIATION',
@@ -55,7 +40,6 @@ const getLayerGroups = (theme: 'core' | 'ghost') => {
     fullLabel: 'MARITIME',
     color: '#26C6DA',
     layers: [
-      { key: 'sdk_sea', label: 'Maritime Lines', icon: Share2, color: '#4FC3F7', dataKey: 'sdk_entities' },
       { key: 'maritime', label: 'Maritime / Naval', icon: Anchor, color: '#26C6DA', dataKey: 'maritime_ports,maritime_chokepoints' },
       { key: 'vessels', label: 'Vessels', icon: Ship, color: '#80DEEA', dataKey: 'maritime_ships' },
     ],
@@ -135,10 +119,10 @@ function Shield(props: any) {
 /** Layers that load map tiles from public servers; hidden in PIPELINE mode. */
 const PUBLIC_TILE_LAYERS = new Set(['terrain_3d']);
 
-function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'core', setTheme, pipelineMode = false }: LayerPanelProps) {
+function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, pipelineMode = false }: LayerPanelProps) {
   const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
 
-  const LAYER_GROUPS = getLayerGroups(theme)
+  const LAYER_GROUPS = getLayerGroups()
     .map(g => ({ ...g, layers: pipelineMode ? g.layers.filter((l: any) => !PUBLIC_TILE_LAYERS.has(l.key)) : g.layers }))
     .filter(g => g.layers.length > 0);
   const ALL_LAYERS = LAYER_GROUPS.flatMap(g => g.layers);
@@ -176,18 +160,12 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
             <div className="grid grid-cols-2 gap-2">
               {group.layers.map((layer) => {
                 const isLayerActive = activeLayers[layer.key];
-                const count = getCount(layer.dataKey, layer.catKey);
+                const count = getCount(layer.dataKey, (layer as { catKey?: string }).catKey);
                 
                 return (
                   <button
                     key={layer.key}
-                    onClick={() => {
-                      if (layer.key === 'sdk_ransomware') {
-                        alert('Ransomware Feed - Coming Soon');
-                      } else {
-                        toggle(layer.key);
-                      }
-                    }}
+                    onClick={() => toggle(layer.key)}
                     className={`flex items-center gap-2 px-2 py-2 rounded border transition-colors ${
                       isLayerActive 
                         ? 'bg-white/10 border-white/20' 
@@ -215,34 +193,6 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
           </div>
         ))}
 
-        {/* MOBILE THEME TOGGLE */}
-        {setTheme && (
-          <div className="flex items-center justify-between mt-4 pt-4 border-t border-[var(--border-primary)] px-2">
-            <div className="text-[10px] font-bold font-mono tracking-widest text-[var(--text-secondary)]">
-              GHOST MODE
-            </div>
-            <button
-              onClick={() => setTheme(theme === 'core' ? 'ghost' : 'core')}
-              className="relative w-12 h-6 rounded-full transition-all duration-500 ease-in-out border flex items-center px-0.5 cursor-pointer hover:shadow-lg"
-              style={{
-                backgroundColor: theme === 'ghost' ? 'rgba(179, 136, 255, 0.15)' : 'rgba(0,0,0,0.4)',
-                borderColor: theme === 'ghost' ? 'rgba(179, 136, 255, 0.5)' : 'rgba(255,255,255,0.1)',
-                boxShadow: theme === 'ghost' ? '0 0 15px rgba(179, 136, 255, 0.3), inset 0 0 8px rgba(179, 136, 255, 0.2)' : 'inset 0 0 5px rgba(0,0,0,0.5)'
-              }}
-            >
-              <motion.div 
-                layout
-                className="w-4 h-4 rounded-full"
-                style={{
-                  backgroundColor: theme === 'ghost' ? '#B388FF' : 'rgba(255,255,255,0.4)',
-                  boxShadow: theme === 'ghost' ? '0 0 10px #B388FF' : 'none'
-                }}
-                animate={{ x: theme === 'ghost' ? 24 : 0 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-              />
-            </button>
-          </div>
-        )}
 
       </div>
     );
@@ -310,19 +260,13 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
                     <div className="flex flex-col gap-1.5">
                       {group.layers.map((layer) => {
                         const isLayerActive = activeLayers[layer.key];
-                        const count = getCount(layer.dataKey, layer.catKey);
+                        const count = getCount(layer.dataKey, (layer as { catKey?: string }).catKey);
                         const Icon = layer.icon || Shield;
                         
                         return (
                           <button
                             key={layer.key}
-                            onClick={() => {
-                              if (layer.key === 'sdk_ransomware') {
-                                alert('Ransomware Feed - Coming Soon');
-                              } else {
-                                toggle(layer.key);
-                              }
-                            }}
+                            onClick={() => toggle(layer.key)}
                             className="w-full flex items-center gap-3 px-2 py-1.5 rounded bg-transparent hover:bg-white/5 transition-colors group"
                           >
                             <div 
@@ -349,32 +293,6 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
         })}
       </div>
 
-      {/* DESKTOP THEME TOGGLE */}
-      {setTheme && (
-        <div className="mt-auto px-2 pt-6 pb-2 border-t border-[var(--border-primary)] flex flex-col items-center gap-3 relative z-50">
-          <div className="text-[9px] font-mono tracking-[0.25em] text-[var(--text-secondary)]">GHOST PROTOCOL</div>
-          <button
-            onClick={() => setTheme(theme === 'core' ? 'ghost' : 'core')}
-            className="relative w-14 h-7 rounded-full transition-all duration-500 ease-in-out border flex items-center px-1 cursor-pointer hover:shadow-lg"
-            style={{
-              backgroundColor: theme === 'ghost' ? 'rgba(179, 136, 255, 0.15)' : 'rgba(0,0,0,0.4)',
-              borderColor: theme === 'ghost' ? 'rgba(179, 136, 255, 0.5)' : 'rgba(255,255,255,0.1)',
-              boxShadow: theme === 'ghost' ? '0 0 15px rgba(179, 136, 255, 0.3), inset 0 0 8px rgba(179, 136, 255, 0.2)' : 'inset 0 0 5px rgba(0,0,0,0.5)'
-            }}
-          >
-            <motion.div 
-              layout
-              className="w-5 h-5 rounded-full"
-              style={{
-                backgroundColor: theme === 'ghost' ? '#B388FF' : 'rgba(255,255,255,0.4)',
-                boxShadow: theme === 'ghost' ? '0 0 10px #B388FF' : 'none'
-              }}
-              animate={{ x: theme === 'ghost' ? 28 : 0 }}
-              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-            />
-          </button>
-        </div>
-      )}
 
     </motion.div>
   );

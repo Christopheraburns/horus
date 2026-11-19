@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { claimChunkReload, isChunkLoadError } from '@/lib/chunk-reload';
 
 interface Props {
   children: React.ReactNode;
@@ -24,7 +25,15 @@ export default class ErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error(`[HORUS] ${this.props.name || 'Component'} Error:`, error, errorInfo);
+    // A chunk from an earlier build (the UI rebuilds on every update): only a
+    // reload onto the current build can recover.
+    if (isChunkLoadError(error) && claimChunkReload()) window.location.reload();
   }
+
+  private retry = () => {
+    if (isChunkLoadError(this.state.error)) window.location.reload();
+    else this.setState({ hasError: false });
+  };
 
   render() {
     if (this.state.hasError) {
@@ -38,7 +47,7 @@ export default class ErrorBoundary extends React.Component<Props, State> {
               {this.state.error?.message}
             </div>
             <button
-              onClick={() => this.setState({ hasError: false })}
+              onClick={this.retry}
               className="mt-3 px-3 py-1 text-[9px] font-mono tracking-widest text-[var(--gold-primary)] border border-[var(--border-primary)] rounded hover:bg-[var(--hover-accent)] transition-colors"
             >
               RETRY

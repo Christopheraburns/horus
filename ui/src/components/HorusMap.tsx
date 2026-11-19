@@ -1,13 +1,38 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback, memo } from 'react';
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import {
   basemapStyleUrl,
   OPENFREEMAP_DARK_STYLE,
   transformBasemapRequest,
 } from '@/lib/tileProxy';
+
+// Positions older than this are drawn faded and marked STALE in popups. The
+// gateway removes them entirely later (aircraft 25 min, moving ships 20 min,
+// ships at anchor 60 min).
+const STALE_AFTER_S = 900;
+
+/** Seconds since Horus last heard from an entity, or null when unknown. */
+function ageSeconds(item: any): number | null {
+  if (typeof item?.age_s === 'number') return item.age_s;           // from the gateway (PIPELINE)
+  const ts = item?.timestamp;                                          // PUBLIC: when the UI received it
+  return typeof ts === 'number' && ts > 0 ? Math.max(0, Math.round((Date.now() - ts) / 1000)) : null;
+}
+
+/** "42 s ago", "7 min ago", "1 h 5 min ago", with a STALE tag past STALE_AFTER_S. */
+function ageLabel(age: unknown): string {
+  const s = typeof age === 'number' ? age : Number(age);
+  if (age === null || age === undefined || age === '' || !Number.isFinite(s)) return '—';
+  const text = s < 60 ? `${Math.round(s)} s ago`
+    : s < 3600 ? `${Math.round(s / 60)} min ago`
+    : `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min ago`;
+  return s > STALE_AFTER_S ? `${text} · STALE` : text;
+}
+
+/** MapLibre expression: true when a feature's age_s is past STALE_AFTER_S. */
+const IS_STALE: any = ['>', ['coalesce', ['get', 'age_s'], 0], STALE_AFTER_S];
 
 interface HorusMapProps {
   /** False in PIPELINE mode: never fall back to a public basemap. */
@@ -22,7 +47,6 @@ interface HorusMapProps {
   projection?: 'mercator' | 'globe';
   mapStyle?: string;
   demoMode?: boolean;
-  theme?: 'core' | 'ghost';
   timeTravelActive?: boolean;
   timeTravelFrame?: { asset_id: string; asset_type: string; lat: number; lng: number; t: number; name?: string }[];
 }
@@ -49,7 +73,7 @@ function computeSolarTerminator(): [number, number][] {
 
 const EMPTY_FC = { type: 'FeatureCollection' as const, features: [] };
 
-function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', mapStyle = 'dark', demoMode = false, theme = 'core', timeTravelActive = false, timeTravelFrame = [], allowPublicTiles = true }: HorusMapProps) {
+function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', mapStyle = 'dark', demoMode = false, timeTravelActive = false, timeTravelFrame = [], allowPublicTiles = true }: HorusMapProps) {
   // Read inside the map's one-time error handler, so keep the latest value in a ref.
   const allowPublicTilesRef = useRef(allowPublicTiles);
   allowPublicTilesRef.current = allowPublicTiles;
@@ -150,6 +174,8 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
 
     const styleUrl = basemapStyleUrl();
 
+    // MapLibre 6: load the worker Horus serves itself (tools/prepare-map-worker.mjs).
+    maplibregl.setWorkerUrl(`/vendor/maplibre/${maplibregl.getVersion()}/maplibre-gl-worker.mjs`);
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: styleUrl,
@@ -179,34 +205,31 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
       mapRef.current = map;
       
       // Theme colors
-      const isGhost = theme === 'ghost';
-      const phantomPurple = '#B388FF';
-      const phantomDark = '#1A0040';
-      const cameraColor = isGhost ? '#B388FF' : '#00E676';
-      const flightCom = isGhost ? phantomPurple : '#00E5FF';
-      const flightPriv = isGhost ? phantomPurple : '#FFD700';
-      const flightGov = isGhost ? phantomPurple : '#FF9500';
-      const flightMil = isGhost ? phantomPurple : '#FF3D3D';
+      const cameraColor = '#00E676';
+      const flightCom = '#00E5FF';
+      const flightPriv = '#FFD700';
+      const flightGov = '#FF9500';
+      const flightMil = '#FF0000';
 
       // Create icons — HORUS Unified Palette
       createIcon(map, 'plane-cyan', flightCom, 24);   
       createIcon(map, 'plane-green', flightPriv, 24);   
       createIcon(map, 'plane-pink', flightGov, 24);    
       createIcon(map, 'plane-red', flightMil, 24);     
-      createIcon(map, 'plane-grey', isGhost ? phantomPurple : '#546E7A', 24);
+      createIcon(map, 'plane-grey', '#546E7A', 24);
       // Aircraft carrying an ICAO airline designator (airline_code) are graph-enrichable
       // — render them in a distinct royal blue (theme-independent marker).
       createIcon(map, 'plane-enrich', '#448AFF', 24);
       // TimeTravel historical aircraft — amber plane icon (matches the replay palette).
       createIcon(map, 'plane-amber', '#FFCA28', 24);
-      createDot(map, 'dot-gold', isGhost ? phantomPurple : '#D4AF37', 8);
-      createDot(map, 'dot-red', isGhost ? phantomPurple : '#D32F2F', 10);
-      createDot(map, 'dot-orange', isGhost ? phantomPurple : '#E65100', 10);
-      createDot(map, 'dot-green', isGhost ? phantomPurple : '#26A69A', 10);
-      createDot(map, 'dot-fire', isGhost ? phantomPurple : '#E65100', 10);
+      createDot(map, 'dot-gold', '#D4AF37', 8);
+      createDot(map, 'dot-red', '#D32F2F', 10);
+      createDot(map, 'dot-orange', '#E65100', 10);
+      createDot(map, 'dot-green', '#26A69A', 10);
+      createDot(map, 'dot-fire', '#E65100', 10);
       createDot(map, 'dot-cctv', cameraColor, 10);
 
-      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','sigint-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'sdk-entities', 'sdk-links', 'malware-nodes', 'network-mesh', 'timetravel'];
+      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','sigint-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'malware-nodes', 'network-mesh', 'timetravel'];
       sources.forEach(s => map.addSource(s, { type: 'geojson', data: EMPTY_FC }));
 
       // Warning icon generator (parameterized — eliminates 3x copy-paste)
@@ -248,7 +271,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
 
 
       // Day/Night
-      map.addLayer({ id: 'day-night-fill', type: 'fill', source: 'day-night', paint: { 'fill-color': isGhost ? '#0D0030' : '#000022', 'fill-opacity': 0.35 }});
+      map.addLayer({ id: 'day-night-fill', type: 'fill', source: 'day-night', paint: { 'fill-color': '#000022', 'fill-opacity': 0.35 }});
 
       // Earthquakes — amber threat spectrum
       map.addLayer({ id: 'eq-circles', type: 'circle', source: 'earthquakes', paint: {
@@ -303,7 +326,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         'text-offset': [0, 1.5], 'text-max-width': 10, 'text-allow-overlap': false,
       }, paint: { 'text-color': '#D32F2F', 'text-halo-color': '#111', 'text-halo-width': 1.5, 'text-opacity': 0.85 }});
 
-      // ── NETWORK INTEL MESH (SDK STYLE) ──
+      // ── NETWORK INTEL MESH ──
       map.addLayer({ id: 'network-mesh-atmo', type: 'line', source: 'network-mesh', paint: {
 
         'line-width': ['interpolate',['linear'],['zoom'], 1, 2, 5, 4, 10, 8],
@@ -458,7 +481,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         map.addLayer({ id: l.id, type: 'symbol', source: l.src, layout: {
           'icon-image': iconImage, 'icon-size': ['interpolate',['linear'],['zoom'], 1,0.4, 5,0.7, 10,1],
           'icon-rotate': ['get','heading'], 'icon-rotation-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true,
-        }, paint: { 'icon-opacity': 0.85 }});
+        }, paint: { 'icon-opacity': ['case', IS_STALE, 0.3, 0.85] }});
       });
 
       // Balloons (moving entities)
@@ -489,55 +512,6 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         'text-field': ['concat', ['to-string', ['get','reading']], ' nSv/h'], 'text-size': 9, 'text-font': ['Noto Sans Regular'],
         'text-offset': [0, 1.5], 'text-allow-overlap': false,
       }, paint: { 'text-color': ['match', ['get','status'], 'DANGER','#D32F2F', 'WARNING','#E65100', '#7E57C2'], 'text-halo-color': '#000', 'text-halo-width': 1 }});
-
-      // ══ HORUS SDK — Lattice Intelligence Mesh ══
-      // Polybolos Style: Delicate, translucent, steel-blue splined mesh
-
-      // ── SEA domain (Distinct Solid Lines) ──
-      // Removed glow to match the clean, diagrammatic look of submarinecablemap.com
-      map.addLayer({ id: 'sdk-sea', type: 'line', source: 'sdk-links', filter: ['==',['get','domain'],'SEA'], paint: {
-        'line-color': ['coalesce', ['get', 'color'], '#1976D2'], // Single solid color from properties
-        'line-width': ['interpolate',['linear'],['zoom'], 1, 0.8, 5, 1.5, 10, 2.5],
-        'line-opacity': ['interpolate',['linear'],['zoom'], 1, 0.3, 5, 0.5, 10, 0.7],
-      }});
-
-      // ── AIR domain (Steel Gray / Cyan) ──
-      map.addLayer({ id: 'sdk-air-atmo', type: 'line', source: 'sdk-links', filter: ['==',['get','domain'],'AIR'], paint: {
-        'line-color': '#4DD0E1',
-        'line-width': ['interpolate',['linear'],['zoom'], 1, 1.5, 5, 5, 10, 8],
-        'line-opacity': 0.04,
-        'line-blur': 3,
-      }});
-      map.addLayer({ id: 'sdk-air-glow', type: 'line', source: 'sdk-links', filter: ['==',['get','domain'],'AIR'], paint: {
-        'line-color': '#80DEEA',
-        'line-width': ['interpolate',['linear'],['zoom'], 1, 0.8, 5, 2, 10, 4],
-        'line-opacity': ['interpolate',['linear'],['zoom'], 1, 0.08, 5, 0.12, 10, 0.18],
-        'line-blur': 1,
-      }});
-      map.addLayer({ id: 'sdk-air', type: 'line', source: 'sdk-links', filter: ['==',['get','domain'],'AIR'], paint: {
-        'line-color': '#B2EBF2',
-        'line-width': ['interpolate',['linear'],['zoom'], 1, 0.15, 5, 0.6, 10, 1.2],
-        'line-opacity': ['interpolate',['linear'],['zoom'], 1, 0.2, 5, 0.35, 10, 0.5],
-      }});
-
-      // ── INTEL domain (Deep Steel / Violet) ──
-      map.addLayer({ id: 'sdk-intel-atmo', type: 'line', source: 'sdk-links', filter: ['==',['get','domain'],'INTEL'], paint: {
-        'line-color': '#7986CB',
-        'line-width': ['interpolate',['linear'],['zoom'], 1, 2.5, 5, 7, 10, 12],
-        'line-opacity': 0.06,
-        'line-blur': 5,
-      }});
-      map.addLayer({ id: 'sdk-intel-glow', type: 'line', source: 'sdk-links', filter: ['==',['get','domain'],'INTEL'], paint: {
-        'line-color': '#9FA8DA',
-        'line-width': ['interpolate',['linear'],['zoom'], 1, 1.2, 5, 3, 10, 6],
-        'line-opacity': ['interpolate',['linear'],['zoom'], 1, 0.12, 5, 0.18, 10, 0.25],
-        'line-blur': 2,
-      }});
-      map.addLayer({ id: 'sdk-intel', type: 'line', source: 'sdk-links', filter: ['==',['get','domain'],'INTEL'], paint: {
-        'line-color': '#C5CAE9',
-        'line-width': ['interpolate',['linear'],['zoom'], 1, 0.3, 5, 1, 10, 2],
-        'line-opacity': ['interpolate',['linear'],['zoom'], 1, 0.3, 5, 0.45, 10, 0.7],
-      }});
 
       // TimeTravel replay entities. Aircraft render as a yellow plane icon (matching
       // the live symbology); vessels/other keep the amber "historical" halo + dot.
@@ -575,7 +549,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
           ['==', ['get','has_imo'], true], '#448AFF',
           ['==', ['get','type'], 'cargo'], '#26C6DA',
           '#B0BEC5'],
-        'circle-opacity': 0.75,
+        'circle-opacity': ['case', IS_STALE, 0.25, 0.75],
       }});
       map.addLayer({ id: 'ship-label', type: 'symbol', source: 'maritime-ships', minzoom: 5, layout: {
         'text-field': ['get','name'], 'text-size': 9, 'text-font': ['Noto Sans Regular'],
@@ -585,7 +559,8 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
           ['==', ['get','type'], 'tanker'], '#E65100',
           ['==', ['get','has_imo'], true], '#448AFF',
           ['==', ['get','type'], 'cargo'], '#26C6DA',
-          '#B0BEC5'], 'text-halo-color': '#000', 'text-halo-width': 1 }});
+          '#B0BEC5'], 'text-halo-color': '#000', 'text-halo-width': 1,
+        'text-opacity': ['case', IS_STALE, 0.35, 1] }});
 
       setMapReady(true);
     });
@@ -608,15 +583,13 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
       popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: '420px', offset: 14 }).setLngLat(coords).setHTML(html).addTo(map);
     };
     const pStyle = `background:rgba(12,14,26,0.95);backdrop-filter:blur(16px);border-radius:10px;padding:16px;font-family:'JetBrains Mono',monospace;`;
-    const linkStyle = `display:inline-block;margin-top:8px;padding:5px 12px;font-size:10px;letter-spacing:0.12em;text-decoration:none;border-radius:5px;font-family:'JetBrains Mono',monospace;`;
 
     // ── XSS PROTECTION HELPERS ──
     const htmlEsc = (s: any): string => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     const idSafe = (s: any): string => String(s ?? '').replace(/[^a-zA-Z0-9_\.\-]/g, '');
-    const urlSafe = (s: any): string => { const u = String(s ?? ''); return /^https?:\/\//i.test(u) ? u : '#'; };
     const colorSafe = (s: any): string => /^#[0-9a-fA-F]{3,8}$/.test(String(s ?? '')) ? String(s) : '#aaa';
 
-    // ── Flights (with FlightAware + ADS-B Exchange links) ──
+    // ── Flights ──
     ['fl-commercial','fl-private','fl-jets','fl-military'].forEach(layer => {
       map.on('click', layer, e => {
         if (!e.features?.length) return;
@@ -636,11 +609,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
             <div><span style="color:#5C5A54;font-size:9px;">REG</span><br/><span style="color:#E8E6E0;">${htmlEsc(p.registration||'—')}</span></div>
             <div><span style="color:#5C5A54;font-size:9px;">POS</span><br/><span style="color:#E8E6E0;">${coords[1].toFixed(2)},${coords[0].toFixed(2)}</span></div>
           </div>
-          <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap;">
-            <a href="https://www.flightaware.com/live/flight/${encodeURIComponent(cs)}" target="_blank" style="${linkStyle}color:#D4AF37;border:1px solid rgba(212,175,55,0.4);background:rgba(212,175,55,0.1);">⚡ FLIGHTAWARE</a>
-            <a href="https://globe.adsbexchange.com/?icao=${encodeURIComponent(p.icao24||'')}" target="_blank" style="${linkStyle}color:#00E5FF;border:1px solid rgba(0,229,255,0.4);background:rgba(0,229,255,0.1);">📡 ADS-B</a>
-            <a href="https://www.radarbox.com/data/flights/${encodeURIComponent(cs)}" target="_blank" style="${linkStyle}color:#FF69B4;border:1px solid rgba(255,105,180,0.4);background:rgba(255,105,180,0.1);">📍 RADARBOX</a>
-          </div>
+          <div style="margin-top:8px;font-size:10px;"><span style="color:#5C5A54;font-size:9px;">LAST UPDATE </span><span style="color:${Number(p.age_s) > STALE_AFTER_S ? '#FF9500' : '#E8E6E0'};">${ageLabel(p.age_s)}</span></div>
           <button onclick="window.openHorusIntel({ callsign: '${idSafe(cs)}', icao24: '${idSafe(p.icao24||'')}', model: '${idSafe(p.model||'')}', registration: '${idSafe(p.registration||'')}' })" style="width:100%;margin-top:8px;padding:6px 12px;background:rgba(212,175,55,0.15);border:1px solid rgba(212,175,55,0.5);color:#D4AF37;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:bold;letter-spacing:0.1em;border-radius:4px;cursor:pointer;">[ DEEP DIVE INTEL ]</button>
         </div>`);
       });
@@ -711,7 +680,6 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
           <div><span style="color:#5C5A54;">DEPTH</span><br/><span style="color:#E8E6E0;">${p.depth||'—'}km</span></div>
           <div><span style="color:#5C5A54;">COORDS</span><br/><span style="color:#E8E6E0;">${coords[1].toFixed(3)}, ${coords[0].toFixed(3)}</span></div>
         </div>
-        <a href="${p.source === 'NIGGG-BAS' ? 'https://ndc.niggg.bas.bg/' : `https://earthquake.usgs.gov/earthquakes/eventpage/${encodeURIComponent(p.id||'')}`}" target="_blank" style="${linkStyle}color:#FF9500;border:1px solid rgba(255,149,0,0.4);background:rgba(255,149,0,0.1);">📊 ${p.source === 'NIGGG-BAS' ? 'NIGGG-BAS' : 'USGS DETAILS'}</a>
       </div>`);
     });
 
@@ -727,7 +695,6 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
           <div><span style="color:#5C5A54;">ALT</span><br/><span style="color:#00E5FF;">${p.alt ? p.alt+' km' : '—'}</span></div>
           <div><span style="color:#5C5A54;">POS</span><br/><span style="color:#E8E6E0;">${coords[1].toFixed(2)}°, ${coords[0].toFixed(2)}°</span></div>
         </div>
-        ${p.noradId ? `<a href="https://www.n2yo.com/satellite/?s=${p.noradId}" target="_blank" style="display:block;text-align:center;padding:4px;margin-top:6px;font-size:8px;font-family:monospace;letter-spacing:0.1em;text-decoration:none;color:#00E5FF;border:1px solid rgba(0,229,255,0.4);background:rgba(0,229,255,0.1);border-radius:2px;cursor:pointer;">📡 TRACK ON N2YO</a>` : ''}
       </div>`);
     });
 
@@ -742,7 +709,6 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
           <div><span style="color:#5C5A54;">BRIGHTNESS</span><br/><span style="color:#FF6B00;">${p.brightness||'—'}K</span></div>
           <div><span style="color:#5C5A54;">COORDS</span><br/><span style="color:#E8E6E0;">${coords[1].toFixed(3)}°, ${coords[0].toFixed(3)}°</span></div>
         </div>
-        <a href="https://firms.modaps.eosdis.nasa.gov/map/#d:24hrs;l:noaa20-viirs,viirs,modis_a,modis_t;@${coords[0]},${coords[1]},10z" target="_blank" style="${linkStyle}color:#FF6B00;border:1px solid rgba(255,107,0,0.4);background:rgba(255,107,0,0.1);">🛰️ NASA FIRMS MAP</a>
       </div>`);
     });
 
@@ -764,9 +730,6 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
           <div><span style="color:#5C5A54;">TARGET IP</span><br/><span style="color:#00E5FF;font-family:monospace;">${htmlEsc(p.ip)}</span></div>
           <div><span style="color:#5C5A54;">STATUS</span><br/><span style="color:${statusColor};">${(p.status||'UNKNOWN').toUpperCase()}</span></div>
         </div>
-        <div style="display:flex;gap:6px;">
-          <a href="https://feodotracker.abuse.ch/browse/" target="_blank" style="${linkStyle}flex:1;text-align:center;color:#E8E6E0;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.05);">THREAT INTEL ↗</a>
-        </div>
         <button onclick="window.openHorusIntel({ type: 'ip', ip: '${idSafe(p.ip)}', threat_type: '${idSafe(p.malware || p.threat_type || '')}', status: '${idSafe(p.status || '')}' })" style="width:100%;margin-top:8px;padding:8px 12px;background:linear-gradient(90deg, rgba(255,23,68,0.1) 0%, rgba(255,23,68,0.2) 100%);border:1px solid rgba(255,23,68,0.6);color:#FF1744;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:bold;letter-spacing:0.15em;border-radius:4px;cursor:pointer;transition:all 0.2s;">DEEP DIVE ANALYTICS</button>
       </div>`);
     });
@@ -778,23 +741,10 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
       const p = e.features[0].properties as any;
       const coords = (e.features[0].geometry as any).coordinates;
       
-      // Map coordinates to Liveuamap regions
-      let sourceUrl = p.url || '';
-      if (!sourceUrl || sourceUrl.includes('google.com')) {
-        const [lng, lat] = coords;
-        if (lat > 44 && lat < 53 && lng > 22 && lng < 40) sourceUrl = 'https://liveuamap.com/'; // Ukraine
-        else if (lat > 30 && lat < 33 && lng > 34 && lng < 36) sourceUrl = 'https://israelpalestine.liveuamap.com/'; // Gaza
-        else if (lat > 33 && lat < 34.5 && lng > 35 && lng < 36.5) sourceUrl = 'https://lebanon.liveuamap.com/'; // Lebanon
-        else if (lat > 32 && lat < 37 && lng > 35 && lng < 42) sourceUrl = 'https://syria.liveuamap.com/'; // Syria
-        else if (lat > 10 && lat < 22 && lng > 22 && lng < 38) sourceUrl = 'https://sudan.liveuamap.com/'; // Sudan
-        else if (lat > 12 && lat < 20 && lng > 42 && lng < 55) sourceUrl = 'https://yemen.liveuamap.com/'; // Yemen
-        else sourceUrl = 'https://liveuamap.com/'; // Global fallback
-      }
 
       popup(coords, `<div style="${pStyle}border:1px solid rgba(255,61,61,0.3);">
         <div style="color:#FF3D3D;font-size:12px;font-weight:700;margin-bottom:6px;">⚠️ CONFLICT EVENT</div>
         <div style="font-size:9px;color:#E8E6E0;margin-bottom:8px;line-height:1.4;">${htmlEsc(p.name||'Unclassified incident')}</div>
-        <a href="${urlSafe(sourceUrl)}" target="_blank" style="${linkStyle}flex:1;text-align:center;color:#FF3D3D;border:1px solid rgba(255,61,61,0.4);background:rgba(255,61,61,0.15);display:inline-block;width:100%;box-sizing:border-box;margin-top:4px;">[ OPEN SOURCE ↗ ]</a>
       </div>`);
     });
 
@@ -811,47 +761,12 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
           <div><span style="color:#5C5A54;">SEVERITY</span><br/><span style="color:${color};">${(p.severity||'unknown').toUpperCase()}</span></div>
           <div><span style="color:#5C5A54;">COORDS</span><br/><span style="color:#E8E6E0;">${coords[1].toFixed(3)}°, ${coords[0].toFixed(3)}°</span></div>
         </div>
-        ${p.sourceUrl ? `<a href="${urlSafe(p.sourceUrl)}" target="_blank" style="${linkStyle}flex:1;text-align:center;color:${color};border:1px solid ${color}40;background:${color}15;display:inline-block;width:100%;box-sizing:border-box;margin-top:4px;">[ OPEN SOURCE ↗ ]</a>` : ''}
       </div>`);
     });
 
 
-    // ── HORUS SDK link click ──
-    const SDK_SOURCE_URLS: Record<string, string> = {
-      'AIS Maritime': 'https://www.marinetraffic.com',
-      'AIS Stream': 'https://aisstream.io',
-      'AIS → Lattice': 'https://aisstream.io',
-      'ADS-B / OpenSky': 'https://opensky-network.org',
-      'ADS-B → Lattice': 'https://opensky-network.org',
-      'Naval Intelligence': 'https://www.odni.gov',
-    };
-    ['sdk-sea','sdk-sea-glow','sdk-air','sdk-air-glow','sdk-intel','sdk-intel-glow'].forEach(layer => {
-      map.on('click', layer, e => {
-        if (!e.features?.length) return;
-        const p = e.features[0].properties as any;
-        const coords = e.lngLat;
-        const srcUrl = p.url || SDK_SOURCE_URLS[p.source] || '#';
-        const domainLabel = p.domain === 'SEA' ? '⚓ MARITIME' : p.domain === 'AIR' ? '✈ AIR CORRIDOR' : '🛡 NAVAL INTEL';
-        const domainColor = p.domain === 'SEA' ? '#4FC3F7' : p.domain === 'AIR' ? '#B3E5FC' : '#81D4FA';
-        const linkStyle = 'text-decoration:none;padding:3px 8px;border-radius:4px;font-size:9px;font-weight:700;letter-spacing:0.05em;';
-        popup([coords.lng, coords.lat], `<div style="${pStyle}border:1px solid ${domainColor}40;">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-            <div style="width:8px;height:8px;border-radius:50%;background:${domainColor};box-shadow:0 0 8px ${domainColor};"></div>
-            <span style="color:${domainColor};font-size:11px;font-weight:700;letter-spacing:0.1em;">${domainLabel}</span>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:9px;margin-bottom:8px;">
-            <div><span style="color:#5C5A54;">FROM</span><br/><span style="color:#E8E6E0;">${htmlEsc(p.fromName || 'Origin')}</span></div>
-            <div><span style="color:#5C5A54;">TO</span><br/><span style="color:#E8E6E0;">${htmlEsc(p.toName || 'Destination')}</span></div>
-            <div><span style="color:#5C5A54;">DOMAIN</span><br/><span style="color:${domainColor};">${p.domain}</span></div>
-            <div><span style="color:#5C5A54;">SOURCE</span><br/><a href="${urlSafe(srcUrl)}" target="_blank" style="color:${domainColor};text-decoration:underline;cursor:pointer;">${htmlEsc(p.source || 'HORUS')}</a></div>
-          </div>
-          <a href="${urlSafe(srcUrl)}" target="_blank" style="${linkStyle}color:${domainColor};border:1px solid ${domainColor}40;background:${domainColor}18;display:inline-block;margin-top:4px;">OPEN SOURCE ↗</a>
-        </div>`);
-      });
-    });
-
     // ── Generic hover for clickables ──
-    ['conflict-icons','cctv-dots','eq-circles','sat-dots','fires-heat','gdelt-dots','weather-dots','infra-dots','maritime-dots','choke-dots','news-dots','sigint-news-dots','balloon-dots','rad-dots','ship-dots','sdk-sea','sdk-sea-glow','sdk-sea-atmo','sdk-air','sdk-air-glow','sdk-air-atmo','sdk-intel','sdk-intel-glow','sdk-intel-atmo','malware-dots'].forEach(layer => {
+    ['conflict-icons','cctv-dots','eq-circles','sat-dots','fires-heat','gdelt-dots','weather-dots','infra-dots','maritime-dots','choke-dots','news-dots','sigint-news-dots','balloon-dots','rad-dots','ship-dots','malware-dots'].forEach(layer => {
       map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
     });
@@ -935,9 +850,11 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
           <div><span style="color:#5C5A54;">LATITUDE</span><br/><span style="color:#E8E6E0;font-family:monospace;">${coords[1].toFixed(4)}°</span></div>
           <div><span style="color:#5C5A54;">LONGITUDE</span><br/><span style="color:#E8E6E0;font-family:monospace;">${coords[0].toFixed(4)}°</span></div>
         </div>
+        <div style="margin-bottom:4px;"><span style="color:#5C5A54;font-size:9px;">LAST UPDATE: </span><span style="color:${Number(p.age_s) > STALE_AFTER_S ? '#FF9500' : '#E8E6E0'};font-size:9px;">${ageLabel(p.age_s)}</span></div>
         <div><span style="color:#5C5A54;font-size:9px;">DESTINATION: </span><span style="color:#E8E6E0;font-size:9px;">${p.destination || 'UNKNOWN'}</span></div>
+        ${p.sources ? `<div style="margin-top:4px;"><span style="color:#5C5A54;font-size:9px;">SOURCES: </span><span style="color:#E8E6E0;font-size:9px;">${String(p.sources).split(',').map(idSafe).join(' · ')}</span></div>` : ''}
+        ${String(p.sources || '').split(',').includes('hormuz.now') ? `<div style="font-size:8px;color:#5C5A54;margin-top:2px;">Data: <a href="https://hormuz.now" target="_blank" rel="noopener noreferrer" style="color:#8A8780;">hormuz.now</a> (CC BY 4.0)</div>` : ''}
         <button onclick="window.openHorusIntel({ type: 'vessel', mmsi: '${idSafe(String(p.mmsi||''))}', imo: '${idSafe(String(p.imo||''))}', name: '${idSafe(p.name||'')}', flag: '${idSafe(p.flag||'')}', speed: '${idSafe(String(p.speed??''))}', destination: '${idSafe(p.destination||'')}' })" style="width:100%;margin-top:10px;padding:6px 12px;background:${color}26;border:1px solid ${color}80;color:${color};font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:bold;letter-spacing:0.1em;border-radius:4px;cursor:pointer;">[ DEEP DIVE INTEL ]</button>
-        <a href="https://www.marinetraffic.com/en/ais/details/ships/mmsi:${p.mmsi}" target="_blank" style="${linkStyle}flex:1;text-align:center;color:${color};border:1px solid ${color}40;background:${color}15;display:inline-block;width:100%;box-sizing:border-box;margin-top:6px;">[ MARINETRAFFIC ↗ ]</a>
       </div>`);
     });
 
@@ -953,10 +870,6 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:9px;margin-bottom:8px;">
           <div><span style="color:#5C5A54;">SEVERITY</span><br/><span style="color:${p.severity === 'high' ? '#FF1744' : '#FFD700'};">${(p.severity||'low').toUpperCase()}</span></div>
           <div><span style="color:#5C5A54;">COORDS</span><br/><span style="color:#E8E6E0;">${coords[1].toFixed(3)}°, ${coords[0].toFixed(3)}°</span></div>
-        </div>
-        <div style="display:flex;gap:6px;">
-          ${p.source ? `<a href="${p.source}" target="_blank" style="${linkStyle}color:#E040FB;border:1px solid rgba(224,64,251,0.4);background:rgba(224,64,251,0.1);">📡 SOURCE</a>` : ''}
-          <a href="https://eonet.gsfc.nasa.gov/api/v3/events/${p.id || ''}" target="_blank" style="${linkStyle}color:#D4AF37;border:1px solid rgba(212,175,55,0.4);background:rgba(212,175,55,0.1);">🛰️ NASA EONET</a>
         </div>
       </div>`);
     });
@@ -977,7 +890,6 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
           <div><span style="color:#5C5A54;">OWNER</span><br/><span style="color:#E8E6E0;">${p.owner || '—'}</span></div>
           <div><span style="color:#5C5A54;">COORDS</span><br/><span style="color:#E8E6E0;">${coords[1].toFixed(3)}°, ${coords[0].toFixed(3)}°</span></div>
         </div>
-        <a href="https://www.google.com/maps/@${coords[1]},${coords[0]},14z/data=!3m1!1e3" target="_blank" style="${linkStyle}color:#76FF03;border:1px solid rgba(118,255,3,0.4);background:rgba(118,255,3,0.1);">SATELLITE VIEW</a>
       </div>`);
     });
 
@@ -1075,7 +987,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
       }
       return filtered.map((f: any) => ({
         type: 'Feature' as const, geometry: { type: 'Point' as const, coordinates: [f.lng, f.lat] },
-        properties: { callsign: f.callsign, heading: f.heading || 0, alt: f.alt, model: f.model, speed_knots: f.speed_knots, registration: f.registration, icao24: f.icao24, airline_code: f.airline_code || '', has_airline: !!(f.airline_code && String(f.airline_code).trim().length >= 2) },
+        properties: { callsign: f.callsign, heading: f.heading || 0, alt: f.alt, model: f.model, speed_knots: f.speed_knots, registration: f.registration, icao24: f.icao24, airline_code: f.airline_code || '', has_airline: !!(f.airline_code && String(f.airline_code).trim().length >= 2), age_s: ageSeconds(f) },
       }));
     };
     setGeo('flights', activeLayers.flights ? toFeatures(data.commercial_flights, 10) : []);
@@ -1084,50 +996,6 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
     setGeo('military', activeLayers.military ? toFeatures(data.military_flights) : []);
   }, [mapReady, data.commercial_flights, data.private_flights, data.private_jets, data.military_flights, activeLayers.flights, activeLayers.private, activeLayers.jets, activeLayers.military]);
 
-    // Update aircraft icon colors dynamically on theme switch
-    useEffect(() => {
-      if (!mapReady || !mapRef.current) return;
-      const map = mapRef.current;
-      
-      const isGhost = theme === 'ghost';
-      const phantomPurple = '#B388FF';
-      const ghostPriv = '#CE93D8';
-      const ghostGov = '#D500F9';
-
-      const flightCom = isGhost ? phantomPurple : '#00E5FF';
-      const flightPriv = isGhost ? ghostPriv : '#FFD700';
-      const flightGov = isGhost ? ghostGov : '#FF9500';
-      const flightMil = '#FF0000';
-
-      const updateMapIcon = (id: string, color: string, size: number) => {
-        if (!map.hasImage(id)) return;
-        const canvas = document.createElement('canvas');
-        canvas.width = size; canvas.height = size;
-        const ctx = canvas.getContext('2d')!;
-        const cx = size / 2, cy = size / 2;
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.moveTo(cx, cy - size * 0.4);
-        ctx.lineTo(cx - size * 0.12, cy + size * 0.1);
-        ctx.lineTo(cx - size * 0.4, cy + size * 0.2);
-        ctx.lineTo(cx - size * 0.4, cy + size * 0.3);
-        ctx.lineTo(cx - size * 0.12, cy + size * 0.15);
-        ctx.lineTo(cx, cy + size * 0.35);
-        ctx.lineTo(cx + size * 0.12, cy + size * 0.15);
-        ctx.lineTo(cx + size * 0.4, cy + size * 0.3);
-        ctx.lineTo(cx + size * 0.4, cy + size * 0.2);
-        ctx.lineTo(cx + size * 0.12, cy + size * 0.1);
-        ctx.closePath();
-        ctx.fill();
-        map.updateImage(id, { width: size, height: size, data: new Uint8Array(ctx.getImageData(0, 0, size, size).data) });
-      };
-
-      updateMapIcon('plane-cyan', flightCom, 24);
-      updateMapIcon('plane-green', flightPriv, 24);
-      updateMapIcon('plane-pink', flightGov, 24);
-      updateMapIcon('plane-red', flightMil, 24);
-      updateMapIcon('plane-grey', isGhost ? phantomPurple : '#546E7A', 24);
-    }, [mapReady, theme]);
 
   // ── DECOUPLED LAYER RENDERERS (Performance Optimized) ──
 
@@ -1228,7 +1096,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
     if (!mapReady) return;
     setGeo('maritime', activeLayers.maritime && data.maritime_ports ? data.maritime_ports.map((p: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [p.lng, p.lat] }, properties: { name: p.name, country: p.country, type: p.type, volume: p.volume, fleet: p.fleet, rank: p.rank } })) : []);
     setGeo('maritime-choke', activeLayers.maritime && data.maritime_chokepoints ? data.maritime_chokepoints.map((c: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [c.lng, c.lat] }, properties: { name: c.name, traffic: c.traffic, risk: c.risk } })) : []);
-    setGeo('maritime-ships', activeLayers.vessels && data.maritime_ships ? data.maritime_ships.map((s: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [s.lng, s.lat] }, properties: { id: s.id ?? s.mmsi, mmsi: s.mmsi, imo: s.imo, has_imo: !!s.imo, name: s.name || s.mmsi?.toString(), type: s.type || 'cargo', speed: s.speed, heading: s.heading, destination: s.destination, flag: s.flag } })) : []);
+    setGeo('maritime-ships', activeLayers.vessels && data.maritime_ships ? data.maritime_ships.map((s: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [s.lng, s.lat] }, properties: { id: s.id ?? s.mmsi, mmsi: s.mmsi, imo: s.imo, has_imo: !!s.imo, name: s.name || s.mmsi?.toString(), type: s.type || 'cargo', speed: s.speed, heading: s.heading, destination: s.destination, flag: s.flag, age_s: ageSeconds(s), sources: Object.keys(s.sources || {}).join(',') } })) : []);
   }, [mapReady, data.maritime_ports, data.maritime_chokepoints, data.maritime_ships, activeLayers.maritime, activeLayers.vessels, setGeo]);
 
   // ── TimeTravel replay: paint the current frame + hide live moving layers ──
@@ -1261,48 +1129,6 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
     if (!mapReady) return;
     setGeo('radiation', activeLayers.radiation && data.radiation ? data.radiation.map((r: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [r.lng, r.lat] }, properties: { name: r.name, city: r.city, country: r.country, reading: r.reading, status: r.status, network: r.network } })) : []);
   }, [mapReady, data.radiation, activeLayers.radiation, setGeo]);
-
-  // ══ HORUS SDK — Lattice Sensor Mesh ══
-  // Uses real submarine cable data for SEA domain, curated routes for AIR/INTEL
-  useEffect(() => {
-    if (!mapReady) return;
-    setGeo('sdk-entities', []);
-
-    const anySDK = activeLayers.sdk_sea || activeLayers.sdk_air || activeLayers.sdk_naval;
-    if (!anySDK) {
-      setGeo('sdk-links', []);
-      return;
-    }
-
-    const links: any[] = [];
-
-    // ── SEA DOMAIN: Real submarine cable data (1-for-1 Match) ──
-    if (activeLayers.sdk_sea && data.submarine_cables) {
-      const ignoredColors = new Set(['#9BB5CC', '#A0B8CD', '#8EABC2', '#9bb5cc', '#a0b8cd', '#8eabc2']);
-      for (const cable of data.submarine_cables) {
-        if (!cable.geometry) continue;
-        
-        // Remove the light blue background arcs
-        if (cable.properties?.color && ignoredColors.has(cable.properties.color)) continue;
-        
-        links.push({
-          type: 'Feature',
-          geometry: cable.geometry, // Raw topographic paths exactly from Submarine Map
-          properties: {
-            domain: 'SEA',
-            fromName: cable.properties?.name || 'Submarine Cable',
-            toName: cable.properties?.landing_points || '',
-            source: 'Global Subsea Cable Network',
-            url: 'https://www.submarinecablemap.com/',
-            ...cable.properties,
-            color: '#1976D2', // Darker blue as requested, more transparent in layer paint
-          },
-        });
-      }
-    }
-
-    setGeo('sdk-links', links);
-  }, [mapReady, activeLayers.sdk_sea, activeLayers.sdk_air, activeLayers.sdk_naval, data.submarine_cables, setGeo]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -1377,9 +1203,6 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
 
     setVis(['balloon-dots','balloon-label'], activeLayers.balloons);
     setVis(['rad-glow','rad-dots','rad-label'], activeLayers.radiation);
-    setVis(['sdk-sea','sdk-sea-glow','sdk-sea-atmo'], activeLayers.sdk_sea !== false);
-    setVis(['sdk-air','sdk-air-glow','sdk-air-atmo'], activeLayers.sdk_air !== false);
-    setVis(['sdk-intel','sdk-intel-glow','sdk-intel-atmo'], activeLayers.sdk_naval !== false);
   }, [mapReady, activeLayers, setVis]);
 
   // Fly-to

@@ -29,6 +29,7 @@ feed at all.
 | Fires | `https://firms.modaps.eosdis.nasa.gov/data/active_fire/noaa-20-viirs-c2/csv/J1_VIIRS_C2_Global_24h.csv` |
 | Flights | `https://api.adsb.lol/v2/point/…` |
 | Vessels | `wss://stream.aisstream.io/v0/stream` (needs `HORUS_AISSTREAM_API_KEY`) |
+| Vessels (hormuz.now) | `https://hormuz.now/api/snapshot`, every 30 s; Strait of Hormuz and Gulf of Oman only (24–28.5°N, 54–59°E); no key; CC BY 4.0 |
 | Weather (EONET) | `https://eonet.gsfc.nasa.gov/api/v3/events` |
 | Weather (NWS) | `https://api.weather.gov/alerts/active` |
 
@@ -63,7 +64,7 @@ Next.js telemetry is already disabled (`NEXT_TELEMETRY_DISABLED=1` in [launch_ui
 | B6 | Fallback basemap | `tiles.openfreemap.org/styles/dark` | Only if the Horus tile server fails | [tileProxy.ts](../ui/src/lib/tileProxy.ts), [HorusMap.tsx:162](../ui/src/components/HorusMap.tsx#L162) — **Fixed (7.4):** there is no fallback in PIPELINE mode; the map stays on the Horus tile server. |
 | B7 | Camera images and video | each camera operator's host (about 60 sources) | PUBLIC: CCTV layer | [CameraViewer.tsx](../ui/src/components/CameraViewer.tsx) |
 | B8 | Embedded video | `youtube.com`, `youtube-nocookie.com`, `rumble.com` | PUBLIC: live news and alerts | [LiveAlerts.tsx](../ui/src/components/LiveAlerts.tsx) |
-| B9 | Links in popups and the Share panel | FlightAware, MarineTraffic, Google Maps, X, Reddit, LinkedIn and others | Only when clicked; these are navigations, not background calls | [HorusMap.tsx](../ui/src/components/HorusMap.tsx), [SharePanel.tsx](../ui/src/components/SharePanel.tsx) |
+| B9 | Links in popups and the Share panel | FlightAware, MarineTraffic, Google Maps, X, Reddit, LinkedIn and others | Only when clicked; these are navigations, not background calls | **Fixed (2026-11-18):** all external links removed from the map popups and the Share panel. Camera and news-feed source links remain (PUBLIC-mode features). |
 
 ## 5. UI server: always, or on use
 
@@ -95,7 +96,7 @@ PIPELINE mode suppresses them in the browser, but S1 still calls some of them.
 | Route | Endpoint |
 |---|---|
 | `/api/flights` | `opensky-network.org`, `api.airplanes.live`, `api.adsb.lol` |
-| `/api/maritime` | `aisstream.io` |
+| `/api/maritime` | `aisstream.io` (WebSocket). Opens on the first PUBLIC request and closes when SOURCE is PIPELINE; verified 0 connections in PIPELINE mode. Key: `AIS_API_KEY`, or the project's `HORUS_AISSTREAM_API_KEY` |
 | `/api/earthquakes`, `/api/infrastructure`, `/api/scm-suppliers`, `/api/country-risk` | `earthquake.usgs.gov` |
 | `/api/fires` | `firms.modaps.eosdis.nasa.gov`, `eonet.gsfc.nasa.gov` |
 | `/api/weather` | `api.weather.gov`, `eonet.gsfc.nasa.gov` |

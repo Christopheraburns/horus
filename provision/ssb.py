@@ -1,4 +1,7 @@
-"""Deploy the Horus Kafka -> Iceberg Flink job through SQL Stream Builder (REST v2).
+"""Deploy the Horus Flink jobs through SQL Stream Builder (REST v2).
+
+Two jobs, one SQL template each: ssb/02_kafka_to_iceberg.sql (the lakehouse
+writer) and ssb/04_detections.sql (alerts to the alerts topic).
 
 Talks to the Streaming Analytics Data Hub's Knox ``cdp-proxy-api`` SSB endpoint
 with the workload user's basic-auth credentials. Idempotent: the project and
@@ -14,8 +17,9 @@ from typing import Dict, Optional
 
 import requests
 
-SQL_TEMPLATE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                            "ssb", "02_kafka_to_iceberg.sql")
+SSB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ssb")
+SQL_TEMPLATE = os.path.join(SSB_DIR, "02_kafka_to_iceberg.sql")
+DETECTIONS_TEMPLATE = os.path.join(SSB_DIR, "04_detections.sql")
 HEALTHY = ("INITIALIZING", "CREATED", "RUNNING", "RESTARTING", "RECONCILING")
 
 
@@ -99,22 +103,23 @@ class SSB:
         self._req("POST", "/user/keytab/generate", json={"principal": principal, "password": password})
 
 
-def render(values: Dict[str, str]) -> str:
-    sql = open(SQL_TEMPLATE).read()
+def render(values: Dict[str, str], template: str = SQL_TEMPLATE) -> str:
+    sql = open(template).read()
     # Drop the comment header: it repeats the tokens and is noise in the SSB editor.
     sql = re.sub(r"\A(--[^\n]*\n|\n)+", "", sql)
     for k, v in values.items():
         sql = sql.replace("{{" + k + "}}", v)
     left = set(re.findall(r"\{\{([A-Z_]+)\}\}", sql))
     if left:
-        raise SsbError(f"unfilled tokens in {SQL_TEMPLATE}: {sorted(left)}")
+        raise SsbError(f"unfilled tokens in {template}: {sorted(left)}")
     return sql
 
 
 def deploy(ssb: SSB, project: str, database: str, table: str, job_name: str,
-           values: Dict[str, str], checkpoint_ms: int = 60000, log=print) -> Optional[str]:
+           values: Dict[str, str], checkpoint_ms: int = 60000, log=print,
+           template: str = SQL_TEMPLATE) -> Optional[str]:
     """Project, then the job. Returns the job state, or None if not submitted."""
-    pid = ssb.ensure_project(project, f"Horus {database}: Kafka -> Iceberg lakehouse job")
+    pid = ssb.ensure_project(project, f"Horus {database}: lakehouse and detection jobs")
     log(f"ssb: project {project} ready ({pid})")
 
     existing = ssb.job(pid, job_name)
@@ -123,15 +128,22 @@ def deploy(ssb: SSB, project: str, database: str, table: str, job_name: str,
         log(f"ssb: job {job_name} already {st}")
         return st
 
-    sql = render(dict(values, JOB_NAME=job_name, PROJECT=project, DATABASE=database))
+    sql = render(dict(values, JOB_NAME=job_name, PROJECT=project, DATABASE=database), template)
     try:
         job = ssb.submit(pid, job_name, sql, checkpoint_ms)
     except SsbError as e:
         m = re.search(r"s3a://([^/]+)/(\S+?/" + re.escape(database) + r"\.db)/", str(e))
-        if "Cannot find table" in str(e) or "AccessControl" in str(e) or "Permission denied" in str(e):
+        lake_job = template == SQL_TEMPLATE
+        if lake_job and ("Cannot find table" in str(e) or "AccessControl" in str(e)
+                         or "Permission denied" in str(e)):
             raise SsbError(
                 f"SSB cannot read {database}.{table} from the metastore -- add a Ranger Hadoop SQL policy "
                 f"(Data Lake Ranger, service cm_hive): user ssb, all on database {database}, table *, column *") from e
+        if "TOPIC_AUTHORIZATION" in str(e) or "TopicAuthorization" in str(e):
+            topics = ", ".join(t for t in (values.get("TOPIC"), values.get("ALERTS_TOPIC")) if t)
+            raise SsbError(
+                f"Flink may not use a Horus topic -- add a Ranger Kafka policy (service cm_kafka): users "
+                f"{values.get('KAFKA_USER')} and ssb, Consume/Publish/Describe on topics {topics}") from e
         if m and "Failed to open input stream" in str(e):
             raise SsbError(
                 f"Flink cannot read the table files in S3 -- add a Ranger S3 (RAZ) policy: bucket {m.group(1)}, "

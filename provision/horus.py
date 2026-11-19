@@ -328,6 +328,7 @@ def deploy_data_plane(cfg: cfgmod.Config, rep: Report, start_flows: bool) -> int
             import kafka_admin
             try:
                 kafka_admin.ensure_topic(brokers, user, pw, ca, cfg.topic)
+                kafka_admin.ensure_topic(brokers, user, pw, ca, cfg.alerts_topic)
                 kafka_ok = True
             except Exception as e:  # noqa: BLE001
                 print(f"kafka: FAILED: {e}")
@@ -355,11 +356,15 @@ def deploy_data_plane(cfg: cfgmod.Config, rep: Report, start_flows: bool) -> int
                 "kafka.topic": (cfg.topic, False, "Topic all feeds publish to"),
                 "aisstream.api.key": (cfg.aisstream_api_key or "", False, "aisstream.io API key (vessels flow only)"),
                 "http.contact": (cfg.http_contact or "", False, "Contact sent in the User-Agent to adsb.lol and NWS"),
+                "opensky.client.id": (cfg.opensky_client_id or "", False,
+                                      "OpenSky API client ID (Flights OpenSky flow)"),
+                "opensky.client.secret": (cfg.opensky_client_secret or "", True,
+                                          "OpenSky API client secret (Flights OpenSky flow)"),
             }
             try:
                 n = nifimod.NiFi(rep.nifi_api, user, pw, verify=ca)
                 nifimod.deploy(n, cfg.instance, cfg.parameter_context, params,
-                               start=start_flows and kafka_ok)
+                               start=start_flows and kafka_ok, optional=cfg.optional_flows)
             except Exception as e:  # noqa: BLE001
                 print(f"nifi: FAILED: {e}")
                 failures += 1
@@ -376,6 +381,15 @@ def deploy_data_plane(cfg: cfgmod.Config, rep: Report, start_flows: bool) -> int
                                "BROKERS": ",".join(brokers), "KAFKA_USER": user, "KAFKA_PASSWORD": pw})
             except Exception as e:  # noqa: BLE001
                 print(f"ssb: FAILED: {e}")
+                failures += 1
+            try:   # independent of the lakehouse job: it needs only the two topics
+                ssbmod.deploy(s, cfg.ssb_project, cfg.database, cfg.table, cfg.detections_job,
+                              {"TOPIC": cfg.topic, "ALERTS_TOPIC": cfg.alerts_topic,
+                               "GROUP_ID": cfg.detections_group, "BROKERS": ",".join(brokers),
+                               "KAFKA_USER": user, "KAFKA_PASSWORD": pw},
+                              template=ssbmod.DETECTIONS_TEMPLATE)
+            except Exception as e:  # noqa: BLE001
+                print(f"ssb: detections FAILED: {e}")
                 failures += 1
         else:
             print("ssb: Flink hub not AVAILABLE or Kafka topic not ready; job skipped")
@@ -397,9 +411,10 @@ def check_data_plane(cfg: cfgmod.Config, rep: Report) -> None:
         if _ready(rep.hubs.get("kafka")) and brokers:
             import kafka_admin
             try:
-                n = kafka_admin.topic_partitions(brokers, user, pw, ca, cfg.topic)
-                rep.add("kafka topic", OK if n else TODO,
-                        f"{cfg.topic} ({n} partitions)" if n else f"{cfg.topic} missing; run create --yes")
+                for label, topic in (("kafka topic", cfg.topic), ("alerts topic", cfg.alerts_topic)):
+                    n = kafka_admin.topic_partitions(brokers, user, pw, ca, topic)
+                    rep.add(label, OK if n else TODO,
+                            f"{topic} ({n} partitions)" if n else f"{topic} missing; run create --yes")
             except Exception as e:  # noqa: BLE001
                 rep.add("kafka topic", FAIL, str(e))
         else:
@@ -428,7 +443,7 @@ def check_data_plane(cfg: cfgmod.Config, rep: Report) -> None:
             import nifi as nifimod
             try:
                 info = nifimod.inspect(nifimod.NiFi(rep.nifi_api, user, pw, verify=ca),
-                                       cfg.instance, cfg.parameter_context)
+                                       cfg.instance, cfg.parameter_context, cfg.optional_flows)
                 rep.add("nifi context", OK if info["context"] else TODO,
                         cfg.parameter_context + ("" if info["context"] else " missing; run create --yes"))
                 g = info["groups"]
@@ -451,17 +466,18 @@ def check_data_plane(cfg: cfgmod.Config, rep: Report) -> None:
             try:
                 s = ssbmod.SSB(rep.ssb_api, user, pw, verify=ca)
                 pid = next((p["id"] for p in s._req("GET", "/projects") if p["name"] == cfg.ssb_project), None)
-                job = s.job(pid, cfg.flink_job) if pid else None
-                if job is None:
-                    rep.add("flink job", TODO, f"{cfg.flink_job} not submitted; run create --yes")
-                else:
-                    st = s.state(pid, job["job_id"])
-                    rep.add("flink job", OK if st == "RUNNING" else FAIL,
-                            f"{cfg.flink_job} {st} (SSB project {cfg.ssb_project})")
+                for label, name in (("flink job", cfg.flink_job), ("detections job", cfg.detections_job)):
+                    job = s.job(pid, name) if pid else None
+                    if job is None:
+                        rep.add(label, TODO, f"{name} not submitted; run create --yes")
+                    else:
+                        st = s.state(pid, job["job_id"])
+                        rep.add(label, OK if st == "RUNNING" else FAIL,
+                                f"{name} {st} (SSB project {cfg.ssb_project})")
             except Exception as e:  # noqa: BLE001
                 rep.add("flink job", FAIL, str(e)[:300])
         else:
-            rep.add("flink job", TODO, "Flink hub not AVAILABLE")
+            rep.add("flink jobs", TODO, "Flink hub not AVAILABLE")
     finally:
         os.unlink(ca)
 
@@ -495,13 +511,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         if rep.blocked:
             print("\nNot creating anything: fix the FAIL rows first.")
             return 1
+        import nifi as nifimod
         print("\nPlan:")
         for h in rep.planned_hubs:
             print(f"  create Data Hub {h['name']}  <- '{h['definition']}'  (billable)")
-        print(f"  ensure topic {cfg.topic}, table {cfg.lake_catalog}.{cfg.database}.{cfg.table}, "
-              f"NiFi context {cfg.parameter_context} + 6 flows"
+        print(f"  ensure topics {cfg.topic} and {cfg.alerts_topic}, table {cfg.lake_catalog}.{cfg.database}.{cfg.table}, "
+              f"NiFi context {cfg.parameter_context} + "
+              f"{len(nifimod.load_flows(cfg.instance, cfg.parameter_context, cfg.optional_flows))} flows"
               + ("" if args.no_start else " (started once Kafka is up)"))
-        print(f"  ensure SSB project {cfg.ssb_project}, Flink job {cfg.flink_job}")
+        print(f"  ensure SSB project {cfg.ssb_project}, Flink jobs {cfg.flink_job} and {cfg.detections_job}")
         if not args.yes:
             print("\nDry run. Re-run with --yes to apply.")
             return 0

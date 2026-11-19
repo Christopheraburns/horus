@@ -13,10 +13,10 @@ account.
 |---|---|---|
 | Kafka Data Hub | new, Streams Messaging Light Duty | `horus-dev-kafka` |
 | Flink Data Hub | new, Streaming Analytics Light Duty | `horus-dev-flink` |
-| NiFi flows (6 feeds) | existing Flow Management (NiFi 2) Data Hub | groups `HORUS-dev - …`, parameter context `Horus-dev` |
-| Kafka topic | Kafka Data Hub | `horus-dev-events` |
+| NiFi flows (7 flows, 5 feeds) | existing Flow Management (NiFi 2) Data Hub | groups `HORUS-dev - …`, parameter context `Horus-dev` |
+| Kafka topics | Kafka Data Hub | `horus-dev-events`, `horus-dev-alerts` |
 | Iceberg table | existing CDW Trino virtual warehouse | `iceberg.horus_dev.events_iceberg` |
-| SSB project and Flink job | Flink Data Hub | project `horus_dev`, job `horus_dev_kafka_to_iceberg` |
+| SSB project and Flink jobs | Flink Data Hub | project `horus_dev`, jobs `horus_dev_kafka_to_iceberg` and `horus_dev_detections` |
 
 Every name comes from `HORUS_INSTANCE`, so teams sharing an environment don't
 collide.
@@ -69,8 +69,8 @@ username or password* or HTTP 401 until the sync has run.
    [`horus.env.example`](../horus.env.example): `CDP_ACCESS_KEY_ID`,
    `CDP_PRIVATE_KEY`, `HORUS_INSTANCE`, `HORUS_ENVIRONMENT`,
    `HORUS_NIFI_DATAHUB`, `HORUS_LAKE_VW`, `HORUS_WORKLOAD_USER`,
-   `HORUS_WORKLOAD_PASSWORD`, `HORUS_AISSTREAM_API_KEY` and
-   `HORUS_HTTP_CONTACT`.
+   `HORUS_WORKLOAD_PASSWORD`, `HORUS_AISSTREAM_API_KEY`, `HORUS_HTTP_CONTACT`,
+   `HORUS_OPENSKY_CLIENT_ID` and `HORUS_OPENSKY_CLIENT_SECRET`.
 3. Start a session and open a terminal. The repo lives at `/home/cdsw/horus`.
    Run every command below from there, and give Application scripts paths
    that start with `horus/`, for example
@@ -99,7 +99,8 @@ anything that already exists is skipped.
 
 ## 4. Kafka topic
 
-`create --yes` creates `horus-<instance>-events` with 3 partitions.
+`create --yes` creates `horus-<instance>-events` (every feed) and
+`horus-<instance>-alerts` (detections), each with 3 partitions.
 
 If you are not allowed to create topics, the provisioner prints the Ranger
 Kafka policy you need.
@@ -115,9 +116,23 @@ Flink job is running.
 `create --yes` does four things here:
 
 1. Creates the `Horus-<instance>` parameter context.
-2. Imports the six feed flows.
+2. Imports the feed flows (one per `nifi/HORUS_*.json`).
 3. Enables their controller services.
 4. Starts the flows, but only if the Kafka topic step succeeded.
+
+Flights come from two flows:
+
+| Flow | Source | Rate | Notes |
+|---|---|---|---|
+| `Flights (OpenSky)`, **off by default** | `opensky-network.org/api/states/all`, the whole world in one call | every 90 seconds, about 3,840 of a standard account's 4,000 daily credits | OpenSky blocks cloud-provider addresses: from AWS the token request times out. Imported and started only when `HORUS_ENABLE_OPENSKY=1` (for on-prem or non-cloud NiFi). Needs an OpenSky account. On the account page, create an **API client**, then set `HORUS_OPENSKY_CLIENT_ID` and `HORUS_OPENSKY_CLIENT_SECRET`. A standard account is for non-commercial use; OpenSky sells a licensed tier for commercial use. |
+| `Flights (adsb.lol)` | six 250 NM circles around major hubs | every 12 minutes, 13:00–03:48 UTC (7 AM–10 PM US Central), about 450 requests a day | Anonymous; adsb.lol allows 500 requests per UTC day per IP (resets 00:00 UTC). The schedule is CRON-driven in the NiFi server's time zone (UTC on Data Hub nodes); change the hours to suit your team. It adds aircraft type and registration, which OpenSky's live data lacks. |
+
+When both run, they publish to the same topic. The live map keeps the newest position per
+aircraft. The lake keeps both, tagged by `source_provider`.
+
+Re-running `create --yes` doesn't change flows that already exist in NiFi. To
+pick up a changed flow, delete its process group in NiFi first (stop it and
+empty its queues), then re-run.
 
 ## 7. Ranger policies (manual, once per instance)
 
@@ -152,6 +167,33 @@ The job removes duplicates as it writes. It keeps the first row for each
 rest. This removes the repeats that polled feeds produce: earthquakes, fires
 and weather alerts are re-sent on every poll. A moving asset's new positions
 have new keys and are kept.
+
+### Detections job
+
+`create --yes` also submits [ssb/04_detections.sql](../ssb/04_detections.sql)
+as `horus_<instance>_detections`. It reads the events topic from the latest
+offset (live traffic only) and writes one JSON alert per detection to
+`horus-<instance>-alerts`:
+
+| Alert | Fires when | Severity |
+|---|---|---|
+| `AIS_GAP` | A vessel underway (3 kn or more) is silent for 2 hours or more and reappears near where it vanished, so it stopped while dark inside AIS coverage. Vessels that leave coverage reappear far away and are not flagged. | MEDIUM |
+| `LOITERING` | A vessel reporting "under way" stays within about 1.5 nm for 90 minutes or more, at 0.3–2 kn. Anchored, moored and fishing vessels are excluded. | LOW |
+| `STS_ENCOUNTER` | Two vessels, both under 2 kn and not moored, are within 0.15 nm (about 280 m) of each other over the same hour. | MEDIUM |
+| `SPEED_JUMP` | Consecutive positions imply more than 60 kn for a vessel or 1000 kn for an aircraft, over a real distance: a spoofed position or a shared MMSI or ICAO address. | MEDIUM |
+| `SQUAWK_EMERGENCY` | An aircraft squawks 7500 (unlawful interference) or 7700 (emergency), both HIGH, or 7600 (radio failure), MEDIUM. | HIGH or MEDIUM |
+
+Each alert has a stable `alert_id`. A condition that persists produces one
+alert per 6-hour bucket, not one per report. Thresholds are in the SQL views;
+after changing one, run `ssb/test/run_local.sh` (Docker) to replay the
+synthetic cases, then stop the job in SSB and re-run `create --yes`.
+
+Known false positives: there is no port database yet, so `STS_ENCOUNTER` can
+fire for ships berthed side by side whose AIS status is not "moored".
+
+To see alerts arriving, run `python tools/tail_alerts.py` in a Workbench
+session (add `--follow` to keep watching). If the job fails on topic
+authorization, the provisioner prints the Ranger Kafka policy to add.
 
 ### Rebuilding the lake
 
@@ -189,7 +231,7 @@ Create them in this order. The UI needs the URLs of the others.
 
 | Application | Script | Runtime | Env vars | Check |
 |---|---|---|---|---|
-| Tile server | `horus/services/tileserver/serve-tiles.py` | Horus Node 22 | `TILESERVER_PUBLIC_URL=https://<tiles>.<domain>/` (trailing slash) | `/styles/dark/style.json` loads |
+| Tile server | `horus/services/tileserver/serve-tiles.py` | Horus Node 22 | `TILESERVER_PUBLIC_URL=https://<tiles>.<domain>/`: this Application's **own** URL, with a trailing slash. A wrong host breaks every glyph, sprite and tile URL in the style. | `/styles/dark/style.json` loads, and every URL in it starts with the tile server's own host |
 | Feeds-gateway | `horus/services/feeds-gateway/gateway_startup.py` | PBJ Workbench Python 3.12 | the "Feeds-Gateway variables" that `status` prints, copied exactly; `INTEL_URL=https://<intel>.<domain>` (no slash); the LLM variables below | `/health` lists all five feeds and `kafka.messages` climbs |
 | Intel resolver | `horus/services/intel/launch_intel_resolver.py` | Horus Node 22 | `MEMGRAPH_URL=https://<graph>.<domain>/cypher` (optional) | `/health` shows about 20,000 `sanctions_entries` |
 | Memgraph | `horus/services/memgraph/app.py` | Horus Memgraph | none | `MATCH (n) RETURN count(n)` returns 949256 |
@@ -201,6 +243,24 @@ basemap URL is compiled into the build. The next start rebuilds the UI if
 `TILESERVER_PUBLIC_URL` has changed, or if a `git pull` has brought in changes
 to `ui/`. Set `HORUS_UI_REBUILD=1` to force a rebuild. Give the UI a profile
 with at least 4 GiB, because `next build` uses a lot of memory.
+
+### How long entities stay on the live map
+
+The feeds-gateway keeps the latest update for each entity and drops it once
+nothing new has arrived for a while. Ages are measured from when the gateway
+received the update, so lakehouse replay behaves the same as live data.
+Optional variables on the feeds-gateway Application:
+
+| Variable | Default | Applies to |
+|---|---|---|
+| `FLIGHT_TTL_SECONDS` | `1500` (25 min) | aircraft |
+| `VESSEL_TTL_MOVING_SECONDS` | `1200` (20 min) | ships at or above `VESSEL_MOVING_KNOTS` |
+| `VESSEL_TTL_STATIONARY_SECONDS` | `3600` (60 min) | ships at anchor or moored, or with no speed |
+| `VESSEL_MOVING_KNOTS` | `1.0` | the threshold between the two |
+| `FEED_TTL_SECONDS` | `3600` (60 min) | every other feed |
+
+The UI draws positions older than 15 minutes faded and marks them STALE, and
+every aircraft and vessel popup shows **LAST UPDATE**.
 
 ### LLM (Mistral)
 
@@ -256,3 +316,5 @@ SSB keytab and the Flink job. To do that, re-run `create --yes`.
 | SSB `Kerberos keytab needs to be unlocked` | Re-run `create --yes`, which unlocks the keytab. |
 | SSB `Failed to open input stream for file: s3a://…` | The Ranger S3 policy is missing, doesn't list `ssb`, or has a path without the leading `/` (step 7). Ranger → **Audits** shows the denied user and path. |
 | `status` shows the `lake table` row as WARN with 0 rows | Normal until the Flink job has completed its first checkpoint. |
+| Map is blank in both SOURCE modes; browser console shows *blocked by CORS policy* for `style.json` | The tile server is running with `--no-cors`. The current launcher sends CORS headers by default; restart the tile server after `git pull`. |
+| Map is blank; `style.json` loads but glyph, sprite or tile requests go to a different host | The tile server's `TILESERVER_PUBLIC_URL` isn't its own URL. Fix it on the tile server Application and restart. |

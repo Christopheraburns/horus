@@ -36,6 +36,7 @@ export async function POST(request: Request) {
         // Forward to configurable URL (no hardcoded IPs)
         const response = await fetch(forwardUrl, {
             method: 'POST',
+            signal: AbortSignal.timeout(15000),
             headers: {
                 'Content-Type': 'application/json',
                 'x-hub-signature-256': signature,

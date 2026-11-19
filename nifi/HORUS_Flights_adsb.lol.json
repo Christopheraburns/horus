@@ -14,7 +14,7 @@
       {
         "identifier": "f38e993d-c4e9-3ca0-a63a-1bc7e69c45c5",
         "instanceIdentifier": "34148a36-019f-1000-0000-000058628a63",
-        "name": "Generate Coordinates for ADSB.lol (5 min)",
+        "name": "Generate Coordinates for ADSB.lol (7AM-10PM CT, every 12 min)",
         "comments": "",
         "position": {
           "x": -184.0,
@@ -87,8 +87,8 @@
           }
         },
         "style": {},
-        "schedulingPeriod": "5 min",
-        "schedulingStrategy": "TIMER_DRIVEN",
+        "schedulingPeriod": "0 0/12 0-3,13-23 * * ?",
+        "schedulingStrategy": "CRON_DRIVEN",
         "executionNode": "PRIMARY",
         "penaltyDuration": "30 sec",
         "yieldDuration": "1 sec",
@@ -898,7 +898,7 @@
           "id": "f38e993d-c4e9-3ca0-a63a-1bc7e69c45c5",
           "type": "PROCESSOR",
           "groupId": "33d6d633-6d6e-368d-b94c-d8b7e297c493",
-          "name": "Generate Coordinates for ADSB.lol (5 min)",
+          "name": "Generate Coordinates for ADSB.lol (7AM-10PM CT, every 12 min)",
           "comments": "",
           "instanceIdentifier": "34148a36-019f-1000-0000-000058628a63"
         },

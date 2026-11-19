@@ -227,6 +227,7 @@ def reshape_vessel(rec: dict) -> dict:
     if imo in (0, "0", 0.0):
         imo = None
 
+    provider = _as_dict(entity.get("source")).get("provider")
     item = {
         "id": _first(mmsi, entity.get("id")),
         "mmsi": mmsi,
@@ -237,8 +238,12 @@ def reshape_vessel(rec: dict) -> dict:
         "speed": _first(props.get("speed"), props.get("sog")),
         "heading": _first(props.get("heading"), props.get("true_heading"), props.get("cog")),
         "destination": _first(props.get("destination"), props.get("dest")),
-        # Horus category (cargo/tanker/military); default matches route.ts.
-        "type": _first(props.get("type"), props.get("shiptype"), props.get("ship_type"), "cargo"),
+        # Horus category (cargo/tanker/military/...). None when this report has
+        # no type (aisstream PositionReports): the gateway keeps the last known
+        # type and the UI defaults to cargo.
+        "type": _first(props.get("type"), _ais_type(props.get("shipType")),
+                       props.get("shiptype"), props.get("ship_type")),
+        "flag": props.get("flag"),
         # Frontend compares to Date.now() in ms; carry the real time or stamp now.
         "timestamp": _first(
             _epoch_ms(props.get("timestamp"), entity.get("timestamp")),
@@ -247,4 +252,21 @@ def reshape_vessel(rec: dict) -> dict:
     }
     if imo is not None:
         item["imo"] = imo
+    if provider:
+        # Which feed reported this position, and every feed heard for this
+        # vessel (provider -> report time, ms); merged across reports in the store.
+        item["source"] = provider
+        item["sources"] = {provider: item["timestamp"]}
     return item
+
+
+def _ais_type(code: Any) -> str | None:
+    """AIS ship type code -> Horus category (same mapping as /api/maritime)."""
+    if not isinstance(code, (int, float)) or not code:
+        return None
+    code = int(code)
+    if 80 <= code <= 89:
+        return "tanker"
+    if code == 35:
+        return "military"
+    return "cargo"

@@ -39,7 +39,17 @@ ENTITIES_TOPIC = (
     os.environ.get("KAFKA_TOPIC")
     or "horus-events"
 )
-FEED_TTL_SECONDS = float(os.environ.get("FEED_TTL_SECONDS", "3600"))
+# How long an entity stays on the live map after Horus last heard from it.
+# Measured from when the gateway received the update (not the report's own
+# time), so lakehouse replay ages the same way as live data.
+FEED_TTL_SECONDS = float(os.environ.get("FEED_TTL_SECONDS", "3600"))          # default, every feed
+# Aircraft move fast: about two adsb.lol cycles (12 min) before one is dropped.
+FLIGHT_TTL_SECONDS = float(os.environ.get("FLIGHT_TTL_SECONDS", "1500"))
+# Vessels: a moving ship that has gone quiet (usually out of shore-based AIS
+# range) is dropped sooner than one at anchor or moored, which barely moves.
+VESSEL_TTL_MOVING_SECONDS = float(os.environ.get("VESSEL_TTL_MOVING_SECONDS", "1200"))
+VESSEL_TTL_STATIONARY_SECONDS = float(os.environ.get("VESSEL_TTL_STATIONARY_SECONDS", "3600"))
+VESSEL_MOVING_KNOTS = float(os.environ.get("VESSEL_MOVING_KNOTS", "1.0"))
 GROUP_ID = os.environ.get("KAFKA_GROUP_ID", "horus-feeds-gateway")
 
 
@@ -84,29 +94,45 @@ class FeedStore:
                 item = self._merge_vessel(bucket[entity_id][0], item)
             bucket[entity_id] = (item, time.monotonic())
 
+    # Descriptors only some reports carry; kept until a report replaces them.
+    _VESSEL_STATIC_FIELDS = ("imo", "destination", "type", "flag")
+
     @staticmethod
     def _merge_vessel(prev: dict, new: dict) -> dict:
-        """Carry AIS ShipStaticData fields across frequent PositionReport overwrites.
+        """Merge a vessel report into the one already held for its MMSI.
 
-        Vessels are MMSI-keyed; PositionReports (position + speed, no IMO) arrive
-        far more often than ShipStaticData (name/destination/IMO ~every 6 min).
-        Without merging, the IMO graph-join key is lost seconds after it lands and
-        vessel Deep-Dive intel never resolves. The direct aisstream path
-        (src/app/api/maritime/route.ts) already merges per-MMSI; this brings the
-        streaming path to parity. New position/speed/heading always win; static
-        descriptors are only carried forward when the incoming record omits them.
+        Vessels are MMSI-keyed and can come from several feeds (aisstream.io,
+        hormuz.now). Two rules:
+
+        - Static descriptors (IMO, destination, type, flag) ride only some
+          reports -- aisstream sends IMO and destination in ShipStaticData,
+          not in the far more frequent PositionReports -- so they are carried
+          forward when the incoming report omits them. IMO is the graph join
+          key; without this, vessel Deep-Dive intel never resolves.
+        - A report older than the one already held (another feed's delayed
+          copy) changes nothing it already has: it only fills missing fields and
+          adds its feed to ``sources``. Otherwise the newest report wins.
         """
-        merged = dict(new)
         mmsi = str(new.get("mmsi") or "")
-        # IMO is the graph join key and only rides ShipStaticData — never drop it.
-        if merged.get("imo") is None and prev.get("imo") is not None:
-            merged["imo"] = prev["imo"]
-        # Destination only rides ShipStaticData; keep it across position updates.
-        if merged.get("destination") in (None, "") and prev.get("destination") not in (None, ""):
-            merged["destination"] = prev["destination"]
+        new_ts, prev_ts = new.get("timestamp"), prev.get("timestamp")
+        if isinstance(new_ts, (int, float)) and isinstance(prev_ts, (int, float)) and new_ts < prev_ts:
+            merged = dict(prev)
+            for key, value in new.items():
+                if merged.get(key) in (None, "") and value not in (None, ""):
+                    merged[key] = value
+        else:
+            merged = dict(new)
+        for key in FeedStore._VESSEL_STATIC_FIELDS:
+            if merged.get(key) in (None, "") and prev.get(key) not in (None, ""):
+                merged[key] = prev[key]
         # Don't let a PositionReport's MMSI-fallback name clobber a real name.
         if merged.get("name") in (None, "", mmsi) and prev.get("name") not in (None, "", mmsi):
             merged["name"] = prev["name"]
+        sources = dict(prev.get("sources") or {})
+        for provider, ts in (new.get("sources") or {}).items():
+            sources[provider] = max(ts, sources.get(provider, ts))
+        if sources:
+            merged["sources"] = sources
         return merged
 
     async def clear(self) -> None:
@@ -137,13 +163,24 @@ class FeedStore:
                 return True, count
             return False, self._batch_count[feed]
 
+    def _ttl_for(self, feed: str, item: dict) -> float:
+        """Seconds an entity stays live after its last update (see the *_TTL_* settings)."""
+        if feed == "flights":
+            return FLIGHT_TTL_SECONDS
+        if feed == "vessels":
+            speed = item.get("speed")
+            moving = isinstance(speed, (int, float)) and speed >= VESSEL_MOVING_KNOTS
+            return VESSEL_TTL_MOVING_SECONDS if moving else VESSEL_TTL_STATIONARY_SECONDS
+        return self._ttl
+
     async def items(self, feed: str) -> list[dict]:
-        cutoff = time.monotonic() - self._ttl
+        """Live items for a feed, each with ``age_s``: seconds since its last update."""
+        now = time.monotonic()
         async with self._lock:
             bucket = self._store.get(feed, {})
-            fresh = {k: v for k, v in bucket.items() if v[1] >= cutoff}
+            fresh = {k: v for k, v in bucket.items() if now - v[1] <= self._ttl_for(feed, v[0])}
             self._store[feed] = fresh  # opportunistic eviction
-            return [item for item, _ in fresh.values()]
+            return [{**item, "age_s": int(now - ts)} for item, ts in fresh.values()]
 
     async def mark_message(self) -> None:
         async with self._lock:

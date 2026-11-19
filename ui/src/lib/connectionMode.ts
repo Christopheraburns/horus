@@ -8,7 +8,7 @@
  * live demonstration of the migration to the streaming lakehouse.
  *
  * The mode flag is a process-global singleton (single node process), the same
- * pattern used by the SDK entity store. It is server-wide, like the recorder
+ * pattern used by the recorder. It is server-wide, like the recorder
  * toggle. Horus starts in pipeline mode (secured) on every restart; the UI
  * toggle shows it as SOURCE: PIPELINE / PUBLIC.
  */

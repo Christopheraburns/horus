@@ -27,7 +27,7 @@ export async function GET(req: Request) {
     const skipped = Promise.reject(new Error('skipped in PIPELINE mode'));
     skipped.catch(() => {});
     const get = (path: string, revalidate: number, publicOnly: boolean) =>
-      publicOnly && pipeline ? skipped : fetch(`${origin}${path}`, { next: { revalidate } });
+      publicOnly && pipeline ? skipped : fetch(`${origin}${path}`, { next: { revalidate }, signal: AbortSignal.timeout(20000) });
 
     // Fetch the internal APIs in parallel (they have their own Cache-Control TTLs)
     const [flightsRes, satsRes, cctvRes, weatherRes, infraRes, gdeltRes] = await Promise.allSettled([

@@ -13,9 +13,9 @@ Status values: Todo / Doing / Done / Blocked / Cut. Estimates are hours.
 
 | ID | Item | Done when | Est | Status |
 |---|---|---|---|---|
-| A1 | Next.js 16.2.6 → 16.4.3 or later (security advisories). Moved from BURNDOWN 2.1. | Build and smoke test pass | 1 | Todo |
+| A1 | Next.js 16.2.6 → 16.4.3 or later (security advisories). Moved from BURNDOWN 2.1. Went to 16.4.6 (with eslint-config-next): the Next advisories cover up to 16.4.4, so 16.4.3 was not enough. Also clears the nested postcss and nanoid advisories. | Build and smoke test pass | 1 | Done |
 | A2 | Port the upstream OSIRIS security fixes: image optimizer disabled, tile proxy narrowed, ArcGIS server-side request forgery fix, rate limits that bind. Moved from BURNDOWN 2.2. | Each fix ported or confirmed not applicable | 3 | Todo |
-| A3 | Audit pass on every service: `npm audit` (UI, intel, tile server) and `pip-audit` (gateway, memgraph shim, provisioner); fix or record each finding | No unexplained high or critical findings | 3 | Todo |
+| A3 | Audit pass on every service: `npm audit` (UI, intel, tile server) and `pip-audit` (gateway, memgraph shim, provisioner); fix or record each finding | No unexplained high or critical findings. UI findings left after A1: ~~**maplibre-gl** critical (XSS in its HTML sanitizer, fixed in 6.4.1)~~ done: upgraded 5.24 → 6.17.0 with the upstream worker setup (self-hosted worker in `public/vendor/maplibre/`, Turbopack URL loader); **sharp** high (libvips/libheif CVEs; fix is 0.35.5, breaking from 0.34), **source-map-js** and **baseline-browser-mapping** (`npm audit fix`) | 3 | Todo |
 | A4 | Pin every base image by digest and every package by exact version (lockfiles already pin npm) | Rebuilds are reproducible | 1 | Todo |
 
 ## B. One image per service
@@ -39,13 +39,14 @@ customer's registry (Artifactory). Applications start from the image with no
 | B11 | Egress-blocked install test: register the images, start every Application with outbound traffic blocked | All Applications reach running | 3 | Todo |
 | B12 | Non-image artifacts for air-gapped delivery: basemap `.mbtiles`, Memgraph snapshot, NiFi flow JSON, OFAC snapshot; checksums and a manifest | Delivery bundle documented | 2 | Todo |
 | B13 | INSTALL.md: image-based install path (registry, runtime registration, Application settings), alongside the current repo-based path | Section written and followed once | 2 | Todo |
+| B14 | `horus-ontology` image: the ontology service (Helios libraries plus the Horus host API, BURNDOWN O13) and wherever Postgres runs (decided in BURNDOWN O0) | Image built and scanned with the set | 2 | Todo |
 
 ## C. Identity and access
 
 | ID | Item | Done when | Est | Status |
 |---|---|---|---|---|
-| C1 | SSO in front of every Application (Knox or Workbench auth); drop unauthenticated access. Moved from BURNDOWN 6.5. | No Application opens without login | 6 | Todo |
-| C2 | Per-user identity through to Trino and Ranger, instead of one shared workload login | Ranger audit shows the viewing user | 4 | Todo |
+| C1 | SSO in front of every Application (Knox or Workbench auth); drop unauthenticated access. Moved from BURNDOWN 6.5. Prerequisite for the ontology (BURNDOWN O13): policies need a signed-in caller. Raised priority | No Application opens without login | 6 | Todo |
+| C2 | Per-user identity through to Trino and Ranger, instead of one shared workload login. Use Helios's caller identity modes (`token` or `impersonate`) so the gateway and the ontology share one mechanism; prerequisite for BURNDOWN O13 and 13.6. Raised priority | Ranger audit shows the viewing user | 4 | Todo |
 | C3 | Bearer token required on the MCP server's `/mcp`; Memgraph shim token passed through. Moved from BURNDOWN 3.2. | Unauthenticated call rejected | 1 | Todo |
 | C4 | Service-to-service tokens between the UI, gateway, intel resolver and Memgraph shim | Direct calls without a token are rejected | 3 | Todo |
 

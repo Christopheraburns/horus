@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const upstream = await fetch(`${GATEWAY_URL}/llm/health`, { cache: 'no-store' });
+    const upstream = await fetch(`${GATEWAY_URL}/llm/health`, { cache: 'no-store', signal: AbortSignal.timeout(8000) });
     const data = await upstream.json().catch(() => ({}));
     if (!upstream.ok) {
       return NextResponse.json(
@@ -43,8 +43,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Streams for as long as the model writes; stops when the browser disconnects.
     const upstream = await fetch(`${GATEWAY_URL}/llm/chat`, {
       method: 'POST',
+      signal: request.signal,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
       cache: 'no-store',

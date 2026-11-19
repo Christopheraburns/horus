@@ -111,13 +111,8 @@ export default function Dashboard() {
   const [mapStyle, setMapStyle] = useState<'dark'|'satellite'>('dark');
   const [entityGraphTarget, setEntityGraphTarget] = useState<{ type: string; id: string; label?: string; properties?: Record<string, any> } | null>(null);
   const [demoMode, setDemoMode] = useState(false);
-  const [horusTheme, setHorusTheme] = useState<'core'|'ghost'>('ghost');
   const [timeTravelActive, setTimeTravelActive] = useState(false);
   const [timeTravelFrame, setTimeTravelFrame] = useState<any[]>([]);
-
-  useEffect(() => {
-    document.body.className = horusTheme === 'core' ? '' : `theme-${horusTheme}`;
-  }, [horusTheme]);
 
   const isMobile = useIsMobile();
   const startTime = useRef(Date.now());
@@ -155,9 +150,6 @@ export default function Dashboard() {
     gps_jamming: false,
     day_night: false,
     cables: false,
-    sdk_sea: false,
-    sdk_air: false,
-    sdk_naval: false,
     terrain_3d: false,
     malware: false,
   });
@@ -549,85 +541,6 @@ export default function Dashboard() {
 
   // Reactive layer fetch: handled by layerFetchedRef above (no duplicate)
 
-  // ── HORUS SDK — Intelligence Fusion Layer ──
-  // Produces node coordinates for the SDK network mesh visualization.
-  // Does NOT duplicate existing layer visuals — SDK layer is LINES ONLY.
-  // Cameras are excluded — they have their own dedicated layer.
-  useEffect(() => {
-    const anyActive = activeLayers.sdk_sea || activeLayers.sdk_air || activeLayers.sdk_naval;
-    if (!anyActive) {
-      dataRef.current = { ...dataRef.current, sdk_entities: [] };
-      return;
-    }
-
-    const sdkEntities: any[] = [];
-
-    // Air domain (nodes only — no visual duplication)
-    const allFlights = [
-      ...(data.commercial_flights || []),
-      ...(data.private_flights || []),
-      ...(data.private_jets || []),
-      ...(data.military_flights || []),
-    ];
-    // Sample flights to keep it clean (every Nth)
-    const flightStep = Math.max(1, Math.floor(allFlights.length / 60));
-    for (let i = 0; i < allFlights.length; i += flightStep) {
-      const f = allFlights[i];
-      if (!f.lat || !f.lng) continue;
-      sdkEntities.push({
-        type: 'Feature', geometry: { type: 'Point', coordinates: [f.lng, f.lat] },
-        properties: { domain: 'AIR', name: f.callsign?.trim() || 'TRACK', source: 'ADS-B / OpenSky' },
-      });
-    }
-
-    // Sea domain
-    const ships = data.maritime_ships || [];
-    const shipStep = Math.max(1, Math.floor(ships.length / 60));
-    for (let i = 0; i < ships.length; i += shipStep) {
-      const s = ships[i];
-      if (!s.lat || !s.lng) continue;
-      sdkEntities.push({
-        type: 'Feature', geometry: { type: 'Point', coordinates: [s.lng, s.lat] },
-        properties: { domain: 'SEA', name: s.name || `MMSI-${s.mmsi}`, source: 'AIS Stream' },
-      });
-    }
-
-    // Events — Earthquakes
-    if (data.earthquakes?.length) {
-      for (const eq of data.earthquakes) {
-        if (!eq.lat || !eq.lng) continue;
-        sdkEntities.push({
-          type: 'Feature', geometry: { type: 'Point', coordinates: [eq.lng, eq.lat] },
-          properties: { domain: 'LAND', name: `M${eq.magnitude} ${eq.place || ''}`, source: 'USGS' },
-        });
-      }
-    }
-
-    // GDELT events
-    if (data.gdelt?.length) {
-      for (const g of data.gdelt) {
-        if (!g.lat || !g.lng) continue;
-        sdkEntities.push({
-          type: 'Feature', geometry: { type: 'Point', coordinates: [g.lng, g.lat] },
-          properties: { domain: 'INTEL', name: g.name || 'GDELT Event', source: 'GDELT Project' },
-        });
-      }
-    }
-
-    // News intel
-    if (data.news?.length) {
-      for (const n of data.news) {
-        if (!n.coords || n.coords.length < 2) continue;
-        sdkEntities.push({
-          type: 'Feature', geometry: { type: 'Point', coordinates: [n.coords[1], n.coords[0]] },
-          properties: { domain: 'INTEL', name: n.title || 'SIGINT', source: n.source || 'RSS Feed' },
-        });
-      }
-    }
-
-    dataRef.current = { ...dataRef.current, sdk_entities: sdkEntities };
-  }, [dataVersion, activeLayers.sdk_sea, activeLayers.sdk_air, activeLayers.sdk_naval]);
-
   const totalFlights = useMemo(() => (
     (data.commercial_flights?.length||0)+(data.private_flights?.length||0)+(data.private_jets?.length||0)+(data.military_flights?.length||0)
   ), [data.commercial_flights, data.private_flights, data.private_jets, data.military_flights]);
@@ -642,7 +555,6 @@ export default function Dashboard() {
       {/* ── MAP ── */}
       <ErrorBoundary name="Map">
         <HorusMap 
-          key={horusTheme}
           allowPublicTiles={!securedMode}
           data={data} 
           activeLayers={activeLayers} 
@@ -654,7 +566,6 @@ export default function Dashboard() {
           onViewStateChange={setMapView} 
           flyToLocation={flyToLocation}
           demoMode={demoMode}
-          theme={horusTheme}
           timeTravelActive={timeTravelActive}
           timeTravelFrame={timeTravelFrame}
         />
@@ -723,7 +634,6 @@ export default function Dashboard() {
         </span>
 
         <UptimeClock />
-        <span className="text-[10px] font-bold tracking-[0.2em] text-[var(--text-muted)] opacity-50 ml-2">V.4.1</span>
 
         <RecorderControl />
 
@@ -745,9 +655,6 @@ export default function Dashboard() {
           <span className="font-bold text-[var(--text-secondary)]">LLM</span>
         </Link>
 
-        <a href="http://localhost:7474" target="_blank" rel="noopener noreferrer" title="Open Neo4j Browser (knowledge graph). Connect bolt://localhost:7687, user neo4j" className="pointer-events-auto glass-panel px-3 py-1.5 flex items-center gap-1.5 text-[8px] font-mono tracking-widest hover:opacity-80 transition-opacity border-white/10 bg-black/20">
-          <span className="font-bold text-[var(--text-secondary)]">NEO4J</span>
-        </a>
 
       </motion.div>
 
@@ -762,16 +669,13 @@ export default function Dashboard() {
           <Link href="/llm" className="glass-panel px-2 py-1 flex items-center gap-1.5 text-[7px] font-mono tracking-widest hover:opacity-80 transition-opacity border-white/10 bg-black/20">
             <span className="font-bold text-[var(--text-secondary)]">LLM</span>
           </Link>
-          <a href="http://localhost:7474" target="_blank" rel="noopener noreferrer" className="glass-panel px-2 py-1 flex items-center gap-1.5 text-[7px] font-mono tracking-widest hover:opacity-80 transition-opacity border-white/10 bg-black/20">
-            <span className="font-bold text-[var(--text-secondary)]">NEO4J</span>
-          </a>
         </motion.div>
       )}
 
 
 
       {/* ── NEW SIDEBAR (Root Level) ── */}
-      {showLayers && !isMobile && <LayerPanel data={data} activeLayers={activeLayers} setActiveLayers={setActiveLayers} pipelineMode={securedMode} theme={horusTheme} setTheme={setHorusTheme} />}
+      {showLayers && !isMobile && <LayerPanel data={data} activeLayers={activeLayers} setActiveLayers={setActiveLayers} pipelineMode={securedMode} />}
 
 
 
@@ -950,7 +854,7 @@ export default function Dashboard() {
                           <div><div className="hud-label" style={{fontSize:'6px'}}>NUC</div><div className="hud-value text-[9px]" style={{color:'var(--accent-nuclear)'}}>{(data.infrastructure?.length||0)}</div></div>
                         </div>
                       </div>
-                      <LayerPanel data={data} activeLayers={activeLayers} setActiveLayers={setActiveLayers} pipelineMode={securedMode} isMobile={true} theme={horusTheme} setTheme={setHorusTheme} />
+                      <LayerPanel data={data} activeLayers={activeLayers} setActiveLayers={setActiveLayers} pipelineMode={securedMode} isMobile={true} />
                       <div className="mt-8">
                         <ViewPresets onNavigate={(lat, lng, zoom) => { setFlyToLocation({ lat, lng, ts: Date.now() }); setMapView(v => ({ ...v, zoom })); setMobilePanel(null); }} />
                       </div>

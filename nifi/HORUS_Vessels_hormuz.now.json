@@ -1,0 +1,1169 @@
+{
+  "flowContents": {
+    "identifier": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b",
+    "instanceIdentifier": "a12f90dd-d015-5468-be2f-4b8b2096daa5",
+    "name": "HORUS - Vessels (hormuz.now)",
+    "comments": "",
+    "position": {
+      "x": -760.0,
+      "y": -24.0
+    },
+    "processGroups": [],
+    "remoteProcessGroups": [],
+    "processors": [
+      {
+        "identifier": "92d5e4df-70f5-5438-a8c4-9b6aea3249f7",
+        "instanceIdentifier": "e06ab0b9-5a8f-518e-bb27-a754a298056e",
+        "name": "Trigger hormuz.now (30 sec)",
+        "comments": "",
+        "position": {
+          "x": -600.0,
+          "y": -200.0
+        },
+        "type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+        "bundle": {
+          "group": "org.apache.nifi",
+          "artifact": "nifi-standard-nar",
+          "version": "2.6.0.4.12.0.0-914"
+        },
+        "properties": {
+          "character-set": "UTF-8",
+          "File Size": "0B",
+          "mime-type": null,
+          "generate-ff-custom-text": "",
+          "Batch Size": "1",
+          "Unique FlowFiles": "false",
+          "Data Format": "Text"
+        },
+        "propertyDescriptors": {
+          "character-set": {
+            "name": "character-set",
+            "displayName": "Character Set",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "File Size": {
+            "name": "File Size",
+            "displayName": "File Size",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "mime-type": {
+            "name": "mime-type",
+            "displayName": "Mime Type",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "generate-ff-custom-text": {
+            "name": "generate-ff-custom-text",
+            "displayName": "Custom Text",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Batch Size": {
+            "name": "Batch Size",
+            "displayName": "Batch Size",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Unique FlowFiles": {
+            "name": "Unique FlowFiles",
+            "displayName": "Unique FlowFiles",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Data Format": {
+            "name": "Data Format",
+            "displayName": "Data Format",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          }
+        },
+        "style": {},
+        "schedulingPeriod": "30 sec",
+        "schedulingStrategy": "TIMER_DRIVEN",
+        "executionNode": "PRIMARY",
+        "penaltyDuration": "30 sec",
+        "yieldDuration": "1 sec",
+        "bulletinLevel": "WARN",
+        "runDurationMillis": 0,
+        "concurrentlySchedulableTaskCount": 1,
+        "autoTerminatedRelationships": [],
+        "scheduledState": "ENABLED",
+        "retryCount": 10,
+        "retriedRelationships": [],
+        "backoffMechanism": "PENALIZE_FLOWFILE",
+        "maxBackoffPeriod": "10 mins",
+        "componentType": "PROCESSOR",
+        "groupIdentifier": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b"
+      },
+      {
+        "identifier": "3817abc6-c78a-520d-bb80-85dd76a2170f",
+        "instanceIdentifier": "b53ba828-ea69-5fff-97fd-13ea96349363",
+        "name": "Get hormuz.now snapshot",
+        "comments": "",
+        "position": {
+          "x": -184.0,
+          "y": -200.0
+        },
+        "type": "org.apache.nifi.processors.standard.InvokeHTTP",
+        "bundle": {
+          "group": "org.apache.nifi",
+          "artifact": "nifi-standard-nar",
+          "version": "2.6.0.4.12.0.0-914"
+        },
+        "properties": {
+          "Request Content-Encoding": "DISABLED",
+          "proxy-configuration-service": null,
+          "Request Multipart Form-Data Filename Enabled": "true",
+          "Request Chunked Transfer-Encoding Enabled": "false",
+          "Response Header Request Attributes Prefix": null,
+          "HTTP/2 Disabled": "False",
+          "Connection Timeout": "20 secs",
+          "Response Cookie Strategy": "DISABLED",
+          "Socket Read Timeout": "30 secs",
+          "Socket Idle Connections": "5",
+          "Request Body Enabled": "true",
+          "OAuth2 Access Token Refresh Strategy": "ON_TOKEN_EXPIRATION",
+          "HTTP URL": "https://hormuz.now/api/snapshot",
+          "Request OAuth2 Access Token Provider": null,
+          "Socket Idle Timeout": "5 mins",
+          "Response Redirects Enabled": "True",
+          "Socket Write Timeout": "15 secs",
+          "Request Header Attributes Pattern": null,
+          "Response FlowFile Naming Strategy": "RANDOM",
+          "Response Cache Enabled": "true",
+          "Request Date Header Enabled": "True",
+          "Request Failure Penalization Enabled": "false",
+          "Response Body Attribute Size": "256",
+          "SSL Context Service": null,
+          "Response Generation Required": "false",
+          "Request User-Agent": "HORUS-Vessel-Layer (#{http.contact})",
+          "Response Header Request Attributes Enabled": "false",
+          "HTTP Method": "GET",
+          "Request Username": null,
+          "Request Content-Type": "${mime.type}",
+          "Response Body Attribute Name": null,
+          "Request Digest Authentication Enabled": "false",
+          "Request Multipart Form-Data Name": null,
+          "Response Cache Size": "10MB",
+          "Response Body Ignored": "false"
+        },
+        "propertyDescriptors": {
+          "Request Content-Encoding": {
+            "name": "Request Content-Encoding",
+            "displayName": "Request Content-Encoding",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "proxy-configuration-service": {
+            "name": "proxy-configuration-service",
+            "displayName": "Proxy Configuration Service",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Multipart Form-Data Filename Enabled": {
+            "name": "Request Multipart Form-Data Filename Enabled",
+            "displayName": "Request Multipart Form-Data Filename Enabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Chunked Transfer-Encoding Enabled": {
+            "name": "Request Chunked Transfer-Encoding Enabled",
+            "displayName": "Request Chunked Transfer-Encoding Enabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response Header Request Attributes Prefix": {
+            "name": "Response Header Request Attributes Prefix",
+            "displayName": "Response Header Request Attributes Prefix",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "HTTP/2 Disabled": {
+            "name": "HTTP/2 Disabled",
+            "displayName": "HTTP/2 Disabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Connection Timeout": {
+            "name": "Connection Timeout",
+            "displayName": "Connection Timeout",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response Cookie Strategy": {
+            "name": "Response Cookie Strategy",
+            "displayName": "Response Cookie Strategy",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Password": {
+            "name": "Request Password",
+            "displayName": "Request Password",
+            "identifiesControllerService": false,
+            "sensitive": true,
+            "dynamic": false
+          },
+          "Socket Read Timeout": {
+            "name": "Socket Read Timeout",
+            "displayName": "Socket Read Timeout",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Socket Idle Connections": {
+            "name": "Socket Idle Connections",
+            "displayName": "Socket Idle Connections",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Body Enabled": {
+            "name": "Request Body Enabled",
+            "displayName": "Request Body Enabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "OAuth2 Access Token Refresh Strategy": {
+            "name": "OAuth2 Access Token Refresh Strategy",
+            "displayName": "OAuth2 Access Token Refresh Strategy",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "HTTP URL": {
+            "name": "HTTP URL",
+            "displayName": "HTTP URL",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request OAuth2 Access Token Provider": {
+            "name": "Request OAuth2 Access Token Provider",
+            "displayName": "Request OAuth2 Access Token Provider",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Socket Idle Timeout": {
+            "name": "Socket Idle Timeout",
+            "displayName": "Socket Idle Timeout",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response Redirects Enabled": {
+            "name": "Response Redirects Enabled",
+            "displayName": "Response Redirects Enabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Socket Write Timeout": {
+            "name": "Socket Write Timeout",
+            "displayName": "Socket Write Timeout",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Header Attributes Pattern": {
+            "name": "Request Header Attributes Pattern",
+            "displayName": "Request Header Attributes Pattern",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response FlowFile Naming Strategy": {
+            "name": "Response FlowFile Naming Strategy",
+            "displayName": "Response FlowFile Naming Strategy",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response Cache Enabled": {
+            "name": "Response Cache Enabled",
+            "displayName": "Response Cache Enabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Date Header Enabled": {
+            "name": "Request Date Header Enabled",
+            "displayName": "Request Date Header Enabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Failure Penalization Enabled": {
+            "name": "Request Failure Penalization Enabled",
+            "displayName": "Request Failure Penalization Enabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response Body Attribute Size": {
+            "name": "Response Body Attribute Size",
+            "displayName": "Response Body Attribute Size",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "SSL Context Service": {
+            "name": "SSL Context Service",
+            "displayName": "SSL Context Service",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response Generation Required": {
+            "name": "Response Generation Required",
+            "displayName": "Response Generation Required",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request User-Agent": {
+            "name": "Request User-Agent",
+            "displayName": "Request User-Agent",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response Header Request Attributes Enabled": {
+            "name": "Response Header Request Attributes Enabled",
+            "displayName": "Response Header Request Attributes Enabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "HTTP Method": {
+            "name": "HTTP Method",
+            "displayName": "HTTP Method",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Username": {
+            "name": "Request Username",
+            "displayName": "Request Username",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Content-Type": {
+            "name": "Request Content-Type",
+            "displayName": "Request Content-Type",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response Body Attribute Name": {
+            "name": "Response Body Attribute Name",
+            "displayName": "Response Body Attribute Name",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Digest Authentication Enabled": {
+            "name": "Request Digest Authentication Enabled",
+            "displayName": "Request Digest Authentication Enabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Request Multipart Form-Data Name": {
+            "name": "Request Multipart Form-Data Name",
+            "displayName": "Request Multipart Form-Data Name",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response Cache Size": {
+            "name": "Response Cache Size",
+            "displayName": "Response Cache Size",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Response Body Ignored": {
+            "name": "Response Body Ignored",
+            "displayName": "Response Body Ignored",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          }
+        },
+        "style": {},
+        "schedulingPeriod": "0 sec",
+        "schedulingStrategy": "TIMER_DRIVEN",
+        "executionNode": "ALL",
+        "penaltyDuration": "30 sec",
+        "yieldDuration": "1 sec",
+        "bulletinLevel": "WARN",
+        "runDurationMillis": 0,
+        "concurrentlySchedulableTaskCount": 1,
+        "autoTerminatedRelationships": [
+          "Retry",
+          "Original"
+        ],
+        "scheduledState": "ENABLED",
+        "retryCount": 10,
+        "retriedRelationships": [],
+        "backoffMechanism": "PENALIZE_FLOWFILE",
+        "maxBackoffPeriod": "10 mins",
+        "componentType": "PROCESSOR",
+        "groupIdentifier": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b"
+      },
+      {
+        "identifier": "020d7330-c067-559e-9b19-c7dd86726631",
+        "instanceIdentifier": "2fce6936-473a-54eb-a5e1-2ad24ad22f9f",
+        "name": "Transform hormuz.now to Horus events",
+        "comments": "Keeps the last emitted position per vessel in local state. Clear the state to re-send every vessel.",
+        "position": {
+          "x": -184.0,
+          "y": 312.0
+        },
+        "type": "org.apache.nifi.processors.script.ExecuteScript",
+        "bundle": {
+          "group": "org.apache.nifi",
+          "artifact": "nifi-scripting-nar",
+          "version": "2.6.0.4.12.0.0-914"
+        },
+        "properties": {
+          "Script File": null,
+          "Script Engine": "Groovy",
+          "Script Body": "/**\n * NiFi ExecuteScript: hormuz.now live snapshot -> canonical horus-events Kafka messages.\n *\n * Input:  FlowFile body = hormuz.now JSON from InvokeHTTP\n *         GET https://hormuz.now/api/snapshot   (the full format, not ?format=compact:\n *         only the full format carries MMSI)\n *         { \"fetchedAt\": <epoch ms>, \"bbox\": {...}, \"count\": n,\n *           \"vessels\": [ { id, mmsi, name, lat, lon, speed, course, heading,\n *                          destination, flag, length, width, dwt, category,\n *                          shiptypeLabel, elapsedMin, posAt, ... } ] }\n * Output: one FlowFile per vessel that moved (or is due a heartbeat), in the\n *         same envelope as the aisstream.io flow (schema_version 1).\n *\n * Source of truth for the script body in nifi/HORUS_Vessels_hormuz.now.json; that\n * flow file is generated by tools/build_hormuz_flow.py.\n *\n * Identity (the multi-source test):\n *   - entity.id = MMSI, the same key the aisstream.io flow uses, so the lake and\n *     the gateway see both sources' reports of a ship as one asset.\n *   - entity.source.originalId = hormuz.now's own vessel id (the lake's event_id),\n *     so each source's observation stays a separate row.\n *   - No valid 9-digit MMSI: entity.id = \"hormuz.now:<id>\" (not linkable).\n *\n * Re-sends: hormuz.now republishes every vessel on every poll, and posAt is\n * derived from elapsedMin (whole minutes) at fetch time, so it shifts on each\n * poll and Flink's (event_id, event_time) dedupe cannot catch repeats. This\n * script remembers, in the processor's local state, the last position and time\n * it emitted per vessel and only emits when the position changes, or every\n * HEARTBEAT_S seconds so stationary ships stay on the live map (a heartbeat\n * reuses the previous time, so the lake drops it as a duplicate).\n *\n * Licence: hormuz.now data is CC BY 4.0; credit hormuz.now with a link\n * (carried as properties.attribution).\n *\n * Explicit f['key'] bracket access throughout (Groovy bean-accessor trap).\n */\nimport groovy.json.JsonSlurper\nimport groovy.json.JsonOutput\nimport java.time.Instant\nimport java.time.ZoneOffset\nimport java.time.format.DateTimeFormatter\nimport org.apache.nifi.components.state.Scope\n\ndef flowFile = session.get()\nif (!flowFile) return\n\ndef MAX_AGE_MIN = 60        // older reports are dropped (gateway TTL is at most 60 min)\ndef HEARTBEAT_S = 600       // re-send an unchanged vessel this often (moving-vessel TTL is 20 min)\ndef SKIP_CATEGORIES = ['navaid'] as Set   // aids to navigation are not vessels\ndef MMSI_RE = ~/^\\d{9}$/\n\ndef ISO = DateTimeFormatter.ofPattern(\"yyyy-MM-dd'T'HH:mm:ss'Z'\")\ndef iso = { long epochSeconds -> Instant.ofEpochSecond(epochSeconds).atOffset(ZoneOffset.UTC).format(ISO) }\n\ndef payload\ntry {\n    payload = new JsonSlurper().parseText(session.read(flowFile).text)\n} catch (Exception e) {\n    log.warn(\"Unparseable hormuz.now snapshot: ${e.message}\")\n    session.transfer(flowFile, REL_FAILURE)\n    return\n}\ndef vessels = payload instanceof Map ? payload['vessels'] : null\nif (!(vessels instanceof List)) {\n    log.warn(\"hormuz.now snapshot has no vessels array\")\n    session.transfer(flowFile, REL_FAILURE)\n    return\n}\n\ndef nowS = Instant.now().epochSecond\ndef fetchedS = (payload['fetchedAt'] instanceof Number) ? ((payload['fetchedAt'] as long) / 1000L) as long : nowS\ndef capturedAt = iso(nowS)\ndef ingestRunId = flowFile.getAttribute('ingest.run.id') ?: ('nifi-' + UUID.randomUUID().toString().take(12))\ndef provider  = 'hormuz.now'\ndef feed      = 'vessels'\ndef sourceUrl = 'https://hormuz.now/api/snapshot'\n\n// Last emitted per vessel: id -> \"lat,lon|eventTimeS|emittedAtS\"\ndef stateManager = context.stateManager\ndef previous = stateManager.getState(Scope.LOCAL).toMap()\ndef nextState = [:]\n\ndef emitted = 0, moved = 0, heartbeats = 0, unchanged = 0, skipped = 0\n\nvessels.each { v ->\n    if (!(v instanceof Map)) { skipped++; return }\n    def id  = v['id'] != null ? v['id'].toString() : ''\n    def lat = v['lat'], lon = v['lon']\n    def category = ((v['category'] ?: 'unknown') as String).toLowerCase()\n    def ageMin = (v['elapsedMin'] instanceof Number) ? (v['elapsedMin'] as int) : 0\n    if (!id || !(lat instanceof Number) || !(lon instanceof Number)) { skipped++; return }\n    if (SKIP_CATEGORIES.contains(category) || ageMin > MAX_AGE_MIN) { skipped++; return }\n\n    def pos = \"${lat},${lon}\"\n    def posAtS = (v['posAt'] instanceof Number) ? ((v['posAt'] as long) / 1000L) as long : fetchedS - ageMin * 60L\n    def prev = previous[id]?.split('\\\\|')\n    long eventS\n    if (prev && prev.length == 3 && prev[0] == pos) {\n        if (nowS - (prev[2] as long) < HEARTBEAT_S) {       // nothing new\n            nextState[id] = previous[id]\n            unchanged++\n            return\n        }\n        eventS = prev[1] as long                              // heartbeat: same time\n        heartbeats++\n    } else {\n        eventS = posAtS\n        if (prev && prev.length == 3) {\n            // A new position must not reuse an earlier time, or Flink drops it.\n            eventS = Math.max(eventS, (prev[1] as long) + 1L)\n        }\n        moved++\n    }\n    nextState[id] = \"${pos}|${eventS}|${nowS}\".toString()\n\n    def mmsiStr = v['mmsi'] != null ? v['mmsi'].toString().trim() : ''\n    def hasMmsi = MMSI_RE.matcher(mmsiStr).matches()\n    def entityId = hasMmsi ? mmsiStr : \"hormuz.now:${id}\".toString()\n    def name = ((v['name'] ?: '') as String).trim() ?: entityId\n\n    def course = v['course']\n    def heading = v['heading']\n    if (!(heading instanceof Number) || (heading as int) == 511) heading = course\n\n    def props = [\n        hormuz_id     : id,\n        type          : category == 'tanker' ? 'tanker' : category,   // UI colours tanker / military\n        category      : category,\n        shiptype_label: (v['shiptypeLabel'] ?: ''),\n        sog           : v['speed'],\n        cog           : course,\n        heading       : heading,\n        destination   : ((v['destination'] ?: '') as String).trim(),\n        flag          : (v['flag'] ?: ''),\n        length        : v['length'],\n        width         : v['width'],\n        dwt           : v['dwt'],\n        age_min       : ageMin,\n        attribution   : 'hormuz.now (CC BY 4.0) https://hormuz.now',\n    ]\n    if (hasMmsi) props['mmsi'] = mmsiStr as Long\n\n    def entity = [\n        id            : entityId,\n        name          : name,\n        domain        : 'SEA',\n        entityType    : 'VESSEL',\n        position      : [lat: lat as Double, lng: lon as Double, alt: 0.0d],\n        threat        : 'NONE',\n        classification: 'UNCLASSIFIED',\n        confidence    : 0.7,\n        timestamp     : iso(eventS),\n        source        : [\n            provider  : provider,\n            feed      : feed,\n            originalId: id,\n            confidence: 0.7,\n            sourceUrl : sourceUrl,\n        ],\n        properties    : props,\n    ]\n\n    def traceId = UUID.randomUUID().toString()\n    def envelope = [\n        schema_version: 1,\n        trace_id      : traceId,\n        ingest_run_id : ingestRunId,\n        source        : feed,\n        captured_at   : capturedAt,\n        entity        : entity,\n    ]\n\n    def out = session.create(flowFile)\n    out = session.write(out, { outStream ->\n        outStream.write(JsonOutput.toJson(envelope).getBytes('UTF-8'))\n    } as OutputStreamCallback)\n    out = session.putAttribute(out, 'mime.type', 'application/json')\n    out = session.putAttribute(out, 'kafka.key', entityId)\n    out = session.putAttribute(out, 'trace.id', traceId)\n    session.transfer(out, REL_SUCCESS)\n    emitted++\n}\n\nstateManager.setState(nextState, Scope.LOCAL)\nlog.info(\"hormuz.now: ${vessels.size()} vessels, emitted ${emitted} (${moved} moved, ${heartbeats} heartbeats), ${unchanged} unchanged, ${skipped} skipped\")\nsession.remove(flowFile)\n",
+          "Module Directory": null
+        },
+        "propertyDescriptors": {
+          "Script File": {
+            "name": "Script File",
+            "displayName": "Script File",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false,
+            "resourceDefinition": {
+              "cardinality": "SINGLE",
+              "resourceTypes": [
+                "FILE"
+              ]
+            }
+          },
+          "Script Engine": {
+            "name": "Script Engine",
+            "displayName": "Script Engine",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Script Body": {
+            "name": "Script Body",
+            "displayName": "Script Body",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Module Directory": {
+            "name": "Module Directory",
+            "displayName": "Module Directory",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false,
+            "resourceDefinition": {
+              "cardinality": "MULTIPLE",
+              "resourceTypes": [
+                "DIRECTORY",
+                "FILE"
+              ]
+            }
+          }
+        },
+        "style": {},
+        "schedulingPeriod": "0 sec",
+        "schedulingStrategy": "TIMER_DRIVEN",
+        "executionNode": "ALL",
+        "penaltyDuration": "30 sec",
+        "yieldDuration": "1 sec",
+        "bulletinLevel": "WARN",
+        "runDurationMillis": 0,
+        "concurrentlySchedulableTaskCount": 1,
+        "autoTerminatedRelationships": [],
+        "scheduledState": "ENABLED",
+        "retryCount": 10,
+        "retriedRelationships": [],
+        "backoffMechanism": "PENALIZE_FLOWFILE",
+        "maxBackoffPeriod": "10 mins",
+        "componentType": "PROCESSOR",
+        "groupIdentifier": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b"
+      },
+      {
+        "identifier": "6c3b3b00-e6ed-5735-8c5d-8e6ab3bf15dc",
+        "instanceIdentifier": "c5d33f52-6f28-574b-b220-f9a3a5ce428b",
+        "name": "PublishKafka",
+        "comments": "",
+        "position": {
+          "x": -176.0,
+          "y": 608.0
+        },
+        "type": "org.apache.nifi.kafka.processors.PublishKafka",
+        "bundle": {
+          "group": "org.apache.nifi",
+          "artifact": "nifi-kafka-nar",
+          "version": "2.6.0.4.12.0.0-914"
+        },
+        "properties": {
+          "compression.type": "none",
+          "acks": "all",
+          "Message Demarcator": null,
+          "Kafka Key Attribute Encoding": "utf-8",
+          "Record Reader": null,
+          "Record Metadata Strategy": "FROM_PROPERTIES",
+          "Transactional ID Prefix": null,
+          "Header Encoding": "UTF-8",
+          "max.request.size": "1 MB",
+          "Topic Name": "#{kafka.topic}",
+          "Kafka Key": null,
+          "partition": null,
+          "Kafka Connection Service": "fca5e988-a6a7-52e2-82e5-c764976f2e0f",
+          "Publish Strategy": "USE_VALUE",
+          "Record Key Writer": null,
+          "Failure Strategy": "Route to Failure",
+          "partitioner.class": "org.apache.kafka.clients.producer.internals.DefaultPartitioner",
+          "Record Writer": null,
+          "Transactions Enabled": "true",
+          "Message Key Field": null,
+          "FlowFile Attribute Header Pattern": null
+        },
+        "propertyDescriptors": {
+          "compression.type": {
+            "name": "compression.type",
+            "displayName": "Compression Type",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "acks": {
+            "name": "acks",
+            "displayName": "Delivery Guarantee",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Message Demarcator": {
+            "name": "Message Demarcator",
+            "displayName": "Message Demarcator",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Kafka Key Attribute Encoding": {
+            "name": "Kafka Key Attribute Encoding",
+            "displayName": "Kafka Key Attribute Encoding",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Record Reader": {
+            "name": "Record Reader",
+            "displayName": "Record Reader",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Record Metadata Strategy": {
+            "name": "Record Metadata Strategy",
+            "displayName": "Record Metadata Strategy",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Transactional ID Prefix": {
+            "name": "Transactional ID Prefix",
+            "displayName": "Transactional ID Prefix",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Header Encoding": {
+            "name": "Header Encoding",
+            "displayName": "Header Encoding",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "max.request.size": {
+            "name": "max.request.size",
+            "displayName": "Max Request Size",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Topic Name": {
+            "name": "Topic Name",
+            "displayName": "Topic Name",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Kafka Key": {
+            "name": "Kafka Key",
+            "displayName": "Kafka Key",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "partition": {
+            "name": "partition",
+            "displayName": "Partition",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Kafka Connection Service": {
+            "name": "Kafka Connection Service",
+            "displayName": "Kafka Connection Service",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Publish Strategy": {
+            "name": "Publish Strategy",
+            "displayName": "Publish Strategy",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Record Key Writer": {
+            "name": "Record Key Writer",
+            "displayName": "Record Key Writer",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Failure Strategy": {
+            "name": "Failure Strategy",
+            "displayName": "Failure Strategy",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "partitioner.class": {
+            "name": "partitioner.class",
+            "displayName": "Partitioner Class",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Record Writer": {
+            "name": "Record Writer",
+            "displayName": "Record Writer",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Transactions Enabled": {
+            "name": "Transactions Enabled",
+            "displayName": "Transactions Enabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Message Key Field": {
+            "name": "Message Key Field",
+            "displayName": "Message Key Field",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "FlowFile Attribute Header Pattern": {
+            "name": "FlowFile Attribute Header Pattern",
+            "displayName": "FlowFile Attribute Header Pattern",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          }
+        },
+        "style": {},
+        "schedulingPeriod": "0 sec",
+        "schedulingStrategy": "TIMER_DRIVEN",
+        "executionNode": "ALL",
+        "penaltyDuration": "30 sec",
+        "yieldDuration": "1 sec",
+        "bulletinLevel": "WARN",
+        "runDurationMillis": 0,
+        "concurrentlySchedulableTaskCount": 1,
+        "autoTerminatedRelationships": [
+          "success"
+        ],
+        "scheduledState": "ENABLED",
+        "retryCount": 10,
+        "retriedRelationships": [],
+        "backoffMechanism": "PENALIZE_FLOWFILE",
+        "maxBackoffPeriod": "10 mins",
+        "componentType": "PROCESSOR",
+        "groupIdentifier": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b"
+      }
+    ],
+    "inputPorts": [],
+    "outputPorts": [],
+    "connections": [
+      {
+        "identifier": "3403a20f-5925-591e-8d05-2894c90b8650",
+        "instanceIdentifier": "9dd627b0-db29-5dac-85cf-7cfe1ab2eac9",
+        "name": "",
+        "source": {
+          "id": "020d7330-c067-559e-9b19-c7dd86726631",
+          "type": "PROCESSOR",
+          "groupId": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b",
+          "name": "Transform hormuz.now to Horus events",
+          "comments": "",
+          "instanceIdentifier": "2fce6936-473a-54eb-a5e1-2ad24ad22f9f"
+        },
+        "destination": {
+          "id": "6c3b3b00-e6ed-5735-8c5d-8e6ab3bf15dc",
+          "type": "PROCESSOR",
+          "groupId": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b",
+          "name": "PublishKafka",
+          "comments": "",
+          "instanceIdentifier": "c5d33f52-6f28-574b-b220-f9a3a5ce428b"
+        },
+        "labelIndex": 0,
+        "zIndex": 4,
+        "selectedRelationships": [
+          "success"
+        ],
+        "backPressureObjectThreshold": 10000,
+        "backPressureDataSizeThreshold": "1 GB",
+        "flowFileExpiration": "0 sec",
+        "prioritizers": [],
+        "bends": [],
+        "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+        "partitioningAttribute": "",
+        "loadBalanceCompression": "DO_NOT_COMPRESS",
+        "componentType": "CONNECTION",
+        "groupIdentifier": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b"
+      },
+      {
+        "identifier": "9043ba68-66f3-5aff-816b-526a64fe2651",
+        "instanceIdentifier": "8801650f-dba7-5445-ad88-304c579ce820",
+        "name": "",
+        "source": {
+          "id": "6c3b3b00-e6ed-5735-8c5d-8e6ab3bf15dc",
+          "type": "PROCESSOR",
+          "groupId": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b",
+          "name": "PublishKafka",
+          "comments": "",
+          "instanceIdentifier": "c5d33f52-6f28-574b-b220-f9a3a5ce428b"
+        },
+        "destination": {
+          "id": "48cbf298-1c34-5051-9089-5d909ae94732",
+          "type": "FUNNEL",
+          "groupId": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b",
+          "name": "Funnel",
+          "comments": "",
+          "instanceIdentifier": "3414a4ff-019f-1000-0000-000047f405e1"
+        },
+        "labelIndex": 0,
+        "zIndex": 6,
+        "selectedRelationships": [
+          "failure"
+        ],
+        "backPressureObjectThreshold": 10000,
+        "backPressureDataSizeThreshold": "1 GB",
+        "flowFileExpiration": "0 sec",
+        "prioritizers": [],
+        "bends": [],
+        "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+        "partitioningAttribute": "",
+        "loadBalanceCompression": "DO_NOT_COMPRESS",
+        "componentType": "CONNECTION",
+        "groupIdentifier": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b"
+      },
+      {
+        "identifier": "2344d57e-1e46-5ce7-aaac-bb257c16c06c",
+        "instanceIdentifier": "0b3766cc-4a63-5b5e-b5c4-14365fb7858c",
+        "name": "",
+        "source": {
+          "id": "020d7330-c067-559e-9b19-c7dd86726631",
+          "type": "PROCESSOR",
+          "groupId": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b",
+          "name": "Transform hormuz.now to Horus events",
+          "comments": "",
+          "instanceIdentifier": "2fce6936-473a-54eb-a5e1-2ad24ad22f9f"
+        },
+        "destination": {
+          "id": "48cbf298-1c34-5051-9089-5d909ae94732",
+          "type": "FUNNEL",
+          "groupId": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b",
+          "name": "Funnel",
+          "comments": "",
+          "instanceIdentifier": "3414a4ff-019f-1000-0000-000047f405e1"
+        },
+        "labelIndex": 0,
+        "zIndex": 5,
+        "selectedRelationships": [
+          "failure"
+        ],
+        "backPressureObjectThreshold": 10000,
+        "backPressureDataSizeThreshold": "1 GB",
+        "flowFileExpiration": "0 sec",
+        "prioritizers": [],
+        "bends": [],
+        "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+        "partitioningAttribute": "",
+        "loadBalanceCompression": "DO_NOT_COMPRESS",
+        "componentType": "CONNECTION",
+        "groupIdentifier": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b"
+      },
+      {
+        "identifier": "2ab8e4a0-2bf1-5522-a92d-ef882f046581",
+        "instanceIdentifier": "73f208d3-0f01-5a77-ac23-f340d52ed486",
+        "name": "",
+        "source": {
+          "id": "3817abc6-c78a-520d-bb80-85dd76a2170f",
+          "type": "PROCESSOR",
+          "groupId": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b",
+          "name": "Get hormuz.now snapshot",
+          "comments": "",
+          "instanceIdentifier": "b53ba828-ea69-5fff-97fd-13ea96349363"
+        },
+        "destination": {
+          "id": "020d7330-c067-559e-9b19-c7dd86726631",
+          "type": "PROCESSOR",
+          "groupId": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b",
+          "name": "Transform hormuz.now to Horus events",
+          "comments": "",
+          "instanceIdentifier": "2fce6936-473a-54eb-a5e1-2ad24ad22f9f"
+        },
+        "labelIndex": 0,
+        "zIndex": 3,
+        "selectedRelationships": [
+          "Response"
+        ],
+        "backPressureObjectThreshold": 10000,
+        "backPressureDataSizeThreshold": "1 GB",
+        "flowFileExpiration": "0 sec",
+        "prioritizers": [],
+        "bends": [],
+        "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+        "partitioningAttribute": "",
+        "loadBalanceCompression": "DO_NOT_COMPRESS",
+        "componentType": "CONNECTION",
+        "groupIdentifier": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b"
+      },
+      {
+        "identifier": "8e9424c1-d733-5ca0-8be4-4fb355dd033b",
+        "instanceIdentifier": "848f20d7-8775-5a42-942f-810947c3ce65",
+        "name": "",
+        "source": {
+          "id": "3817abc6-c78a-520d-bb80-85dd76a2170f",
+          "type": "PROCESSOR",
+          "groupId": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b",
+          "name": "Get hormuz.now snapshot",
+          "comments": "",
+          "instanceIdentifier": "b53ba828-ea69-5fff-97fd-13ea96349363"
+        },
+        "destination": {
+          "id": "48cbf298-1c34-5051-9089-5d909ae94732",
+          "type": "FUNNEL",
+          "groupId": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b",
+          "name": "Funnel",
+          "comments": "",
+          "instanceIdentifier": "3414a4ff-019f-1000-0000-000047f405e1"
+        },
+        "labelIndex": 0,
+        "zIndex": 2,
+        "selectedRelationships": [
+          "No Retry",
+          "Failure"
+        ],
+        "backPressureObjectThreshold": 10000,
+        "backPressureDataSizeThreshold": "1 GB",
+        "flowFileExpiration": "0 sec",
+        "prioritizers": [],
+        "bends": [],
+        "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+        "partitioningAttribute": "",
+        "loadBalanceCompression": "DO_NOT_COMPRESS",
+        "componentType": "CONNECTION",
+        "groupIdentifier": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b"
+      },
+      {
+        "identifier": "48e90f89-c8e6-5e3f-89f8-a4b5abd30349",
+        "instanceIdentifier": "5705c301-b476-54f9-8ece-f98266370444",
+        "name": "",
+        "source": {
+          "id": "92d5e4df-70f5-5438-a8c4-9b6aea3249f7",
+          "type": "PROCESSOR",
+          "groupId": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b",
+          "name": "Trigger hormuz.now (30 sec)",
+          "comments": "",
+          "instanceIdentifier": "e06ab0b9-5a8f-518e-bb27-a754a298056e"
+        },
+        "destination": {
+          "id": "3817abc6-c78a-520d-bb80-85dd76a2170f",
+          "type": "PROCESSOR",
+          "groupId": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b",
+          "name": "Get hormuz.now snapshot",
+          "comments": "",
+          "instanceIdentifier": "b53ba828-ea69-5fff-97fd-13ea96349363"
+        },
+        "labelIndex": 0,
+        "zIndex": 7,
+        "selectedRelationships": [
+          "success"
+        ],
+        "backPressureObjectThreshold": 10000,
+        "backPressureDataSizeThreshold": "1 GB",
+        "flowFileExpiration": "0 sec",
+        "prioritizers": [],
+        "bends": [],
+        "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+        "partitioningAttribute": "",
+        "loadBalanceCompression": "DO_NOT_COMPRESS",
+        "componentType": "CONNECTION",
+        "groupIdentifier": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b"
+      }
+    ],
+    "labels": [],
+    "funnels": [
+      {
+        "identifier": "48cbf298-1c34-5051-9089-5d909ae94732",
+        "instanceIdentifier": "4ee32ba2-5a8d-5166-aea7-11c342427df1",
+        "position": {
+          "x": -856.0,
+          "y": 80.0
+        },
+        "componentType": "FUNNEL",
+        "groupIdentifier": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b"
+      }
+    ],
+    "controllerServices": [
+      {
+        "identifier": "fca5e988-a6a7-52e2-82e5-c764976f2e0f",
+        "instanceIdentifier": "c534e809-10aa-57f8-b3ce-f6891605b14d",
+        "name": "Kafka3ConnectionService",
+        "comments": "",
+        "type": "org.apache.nifi.kafka.service.Kafka3ConnectionService",
+        "bundle": {
+          "group": "org.apache.nifi",
+          "artifact": "nifi-kafka-3-service-nar",
+          "version": "2.6.0.4.12.0.0-914"
+        },
+        "properties": {
+          "ack.wait.time": "5 sec",
+          "sasl.username": "#{kafka.sasl.username}",
+          "max.poll.records": "10000",
+          "bootstrap.servers": "#{kafka.bootstrap.servers}",
+          "sasl.kerberos.service.name": null,
+          "security.protocol": "SASL_SSL",
+          "SSL Context Service": null,
+          "sasl.mechanism": "PLAIN",
+          "isolation.level": "read_committed",
+          "oauth2-access-token-provider-service": null,
+          "max.block.ms": "5 sec",
+          "kerberos-user-service": null,
+          "default.api.timeout.ms": "60 sec",
+          "sasl.password": "#{kafka.sasl.password}"
+        },
+        "propertyDescriptors": {
+          "ack.wait.time": {
+            "name": "ack.wait.time",
+            "displayName": "Acknowledgment Wait Time",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "sasl.username": {
+            "name": "sasl.username",
+            "displayName": "SASL Username",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "max.poll.records": {
+            "name": "max.poll.records",
+            "displayName": "Max Poll Records",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "bootstrap.servers": {
+            "name": "bootstrap.servers",
+            "displayName": "Bootstrap Servers",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "sasl.kerberos.service.name": {
+            "name": "sasl.kerberos.service.name",
+            "displayName": "Kerberos Service Name",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "security.protocol": {
+            "name": "security.protocol",
+            "displayName": "Security Protocol",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "SSL Context Service": {
+            "name": "SSL Context Service",
+            "displayName": "SSL Context Service",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "sasl.mechanism": {
+            "name": "sasl.mechanism",
+            "displayName": "SASL Mechanism",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "isolation.level": {
+            "name": "isolation.level",
+            "displayName": "Transaction Isolation Level",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "oauth2-access-token-provider-service": {
+            "name": "oauth2-access-token-provider-service",
+            "displayName": "OAuth2 Access Token Provider Service",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "max.block.ms": {
+            "name": "max.block.ms",
+            "displayName": "Max Metadata Wait Time",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "kerberos-user-service": {
+            "name": "kerberos-user-service",
+            "displayName": "Kerberos User Service",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "sasl.password": {
+            "name": "sasl.password",
+            "displayName": "SASL Password",
+            "identifiesControllerService": false,
+            "sensitive": true,
+            "dynamic": false
+          },
+          "default.api.timeout.ms": {
+            "name": "default.api.timeout.ms",
+            "displayName": "Client Timeout",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          }
+        },
+        "controllerServiceApis": [
+          {
+            "type": "org.apache.nifi.kafka.service.api.KafkaConnectionService",
+            "bundle": {
+              "group": "org.apache.nifi",
+              "artifact": "nifi-kafka-service-api-nar",
+              "version": "2.6.0.4.12.0.0-914"
+            }
+          }
+        ],
+        "scheduledState": "DISABLED",
+        "bulletinLevel": "WARN",
+        "componentType": "CONTROLLER_SERVICE",
+        "groupIdentifier": "b4f1314c-1d5f-5fcf-9eb4-0725f7ad187b"
+      }
+    ],
+    "defaultFlowFileExpiration": "0 sec",
+    "defaultBackPressureObjectThreshold": 10000,
+    "defaultBackPressureDataSizeThreshold": "1 GB",
+    "scheduledState": "ENABLED",
+    "executionEngine": "INHERITED",
+    "maxConcurrentTasks": 1,
+    "statelessFlowTimeout": "1 min",
+    "flowFileConcurrency": "UNBOUNDED",
+    "flowFileOutboundPolicy": "STREAM_WHEN_AVAILABLE",
+    "componentType": "PROCESS_GROUP",
+    "parameterContextName": "Horus"
+  },
+  "externalControllerServices": {},
+  "parameterContexts": {
+    "Horus": {
+      "name": "Horus",
+      "description": "Shared settings for all Horus feed flows",
+      "parameters": [
+        {
+          "name": "kafka.bootstrap.servers",
+          "description": "Comma-separated broker list, port 9093",
+          "sensitive": false,
+          "provided": false,
+          "value": ""
+        },
+        {
+          "name": "kafka.sasl.username",
+          "description": "CDP workload user name",
+          "sensitive": false,
+          "provided": false,
+          "value": ""
+        },
+        {
+          "name": "kafka.sasl.password",
+          "description": "CDP workload password",
+          "sensitive": true,
+          "provided": false
+        },
+        {
+          "name": "kafka.topic",
+          "description": "Topic all feeds publish to",
+          "sensitive": false,
+          "provided": false,
+          "value": "horus-events"
+        },
+        {
+          "name": "aisstream.api.key",
+          "description": "aisstream.io API key (vessels flow only)",
+          "sensitive": false,
+          "provided": false,
+          "value": ""
+        },
+        {
+          "name": "http.contact",
+          "description": "Contact (email or URL) sent in the User-Agent to adsb.lol and NWS",
+          "sensitive": false,
+          "provided": false,
+          "value": ""
+        }
+      ],
+      "inheritedParameterContexts": [],
+      "componentType": "PARAMETER_CONTEXT"
+    }
+  },
+  "flowEncodingVersion": "1.0",
+  "parameterProviders": {},
+  "latest": false
+}

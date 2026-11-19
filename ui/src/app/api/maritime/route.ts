@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import WebSocket from 'ws';
-import { shouldUseGateway, securedProxy } from '@/lib/connectionMode';
+import { shouldUseGateway, securedProxy, isSecured } from '@/lib/connectionMode';
 
 /**
  * HORUS — Maritime Intelligence
@@ -87,6 +87,7 @@ const CHOKEPOINTS = [
 const globalForAis = globalThis as unknown as {
   shipsCache: Map<number, any>;
   isAisConnecting: boolean;
+  ws?: WebSocket | null;
 };
 
 if (!globalForAis.shipsCache) {
@@ -96,9 +97,28 @@ if (!globalForAis.shipsCache) {
 
 const shipsCache = globalForAis.shipsCache;
 
+// The aisstream key: AIS_API_KEY if set on the UI Application, otherwise the
+// project-wide HORUS_AISSTREAM_API_KEY (the same key the NiFi vessels flow uses).
+function aisApiKey(): string | undefined {
+  return process.env.AIS_API_KEY || process.env.HORUS_AISSTREAM_API_KEY || undefined;
+}
+
+// The direct aisstream connection is for SOURCE: PUBLIC only. It opens on the
+// first PUBLIC request and closes when the mode is PIPELINE, so the UI server
+// makes no internet connection in PIPELINE mode.
+function disconnectAisStream() {
+  const ws = globalForAis.ws;
+  globalForAis.ws = null;
+  globalForAis.isAisConnecting = false;
+  if (ws) {
+    try { ws.removeAllListeners('close'); ws.close(); } catch { /* already closed */ }
+  }
+}
+
 function connectAisStream() {
-  if (globalForAis.isAisConnecting) return;
-  const apiKey = process.env.AIS_API_KEY;
+  if (globalForAis.isAisConnecting || globalForAis.ws) return;
+  if (isSecured()) return;
+  const apiKey = aisApiKey();
   if (!apiKey) return;
 
   globalForAis.isAisConnecting = true;
@@ -106,6 +126,7 @@ function connectAisStream() {
 
   try {
     ws = new WebSocket("wss://stream.aisstream.io/v0/stream");
+    globalForAis.ws = ws;
   } catch (e) {
     globalForAis.isAisConnecting = false;
     return;
@@ -199,7 +220,9 @@ function connectAisStream() {
 
   ws.on("close", () => {
     globalForAis.isAisConnecting = false;
-    setTimeout(connectAisStream, 5000); // Reconnect
+    if (globalForAis.ws === ws) globalForAis.ws = null;
+    // Reconnect only while still in PUBLIC mode.
+    setTimeout(() => { if (!isSecured()) connectAisStream(); }, 5000);
   });
 
   ws.on("error", () => {
@@ -207,8 +230,7 @@ function connectAisStream() {
   });
 }
 
-// Start connection process asynchronously
-connectAisStream();
+// No connection at module load: GET opens it in PUBLIC mode only.
 
 // --- SCM Integration: VesselAPI Hybrid Fallback (Satellite AIS) ---
 let lastVesselApiFetch = 0;
@@ -222,6 +244,7 @@ export async function GET() {
   // through the same buildMaritimeResponse() the direct path uses, so the static
   // ports/chokepoints (air-gap-safe) recompute against the streamed ships.
   if (shouldUseGateway('vessels')) {
+    disconnectAisStream();
     const gw = await securedProxy<{ vessels: any[] }>('/feeds/vessels', { vessels: [] });
     const ships = gw.vessels ?? [];
     return NextResponse.json(buildMaritimeResponse(ships), {
@@ -231,6 +254,11 @@ export async function GET() {
       },
     });
   }
+
+  // PUBLIC mode: make sure the direct aisstream connection is open. Ships
+  // accumulate from the stream, so the first response after switching may be
+  // empty; the UI refreshes and fills in within a minute.
+  connectAisStream();
 
   // Trigger Hybrid Fallback
   await fetchVesselApiFallback();
