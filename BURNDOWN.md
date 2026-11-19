@@ -24,7 +24,7 @@ BURNDOWN-DEPLOY A1 and A2.
 
 | ID | Item | Done when | Est | Status |
 |---|---|---|---|---|
-| 2.3 | Port #370 (derived or missing data not shown as observed) and #469 (reload on chunk load failure) | Ported | 2 | Todo |
+| 2.3 | Port #370 (derived or missing data not shown as observed), #469 (reload on chunk load failure), #289 (bound every fetch, type errors fail the build, stream-status host check); #385 (ArcGIS SSRF) does not apply, Horus has no `/api/arcgis` | Ported | 2 | Done 2026-11-18: country-risk basis and word-boundary quake matching, honest `/api/health`, news keyword labels and centroid precision, rightmost-proxy client IP, chunk reload, every server fetch bounded (safeFetch defaults to 30 s; LLM streams end with the browser), `ignoreBuildErrors: false` with 0 type errors; upstream's 28 tests for these pass against the port (not added to Horus: no test runner) |
 
 ## 3. Horus MCP server
 

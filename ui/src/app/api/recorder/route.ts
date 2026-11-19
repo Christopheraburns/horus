@@ -18,7 +18,7 @@ const RECORDER_URL =
 
 export async function GET() {
   try {
-    const res = await fetch(`${RECORDER_URL}/`, { cache: 'no-store' });
+    const res = await fetch(`${RECORDER_URL}/`, { cache: 'no-store', signal: AbortSignal.timeout(8000) });
     if (!res.ok) {
       return NextResponse.json(
         { recording: false, available: false, error: `recorder HTTP ${res.status}` },
@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
   try {
     const res = await fetch(`${RECORDER_URL}/control`, {
       method: 'POST',
+      signal: AbortSignal.timeout(15000),
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action }),
       cache: 'no-store',

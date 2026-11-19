@@ -176,7 +176,7 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
             <div className="grid grid-cols-2 gap-2">
               {group.layers.map((layer) => {
                 const isLayerActive = activeLayers[layer.key];
-                const count = getCount(layer.dataKey, layer.catKey);
+                const count = getCount(layer.dataKey, (layer as { catKey?: string }).catKey);
                 
                 return (
                   <button
@@ -310,7 +310,7 @@ function LayerPanel({ data, activeLayers, setActiveLayers, isMobile, theme = 'co
                     <div className="flex flex-col gap-1.5">
                       {group.layers.map((layer) => {
                         const isLayerActive = activeLayers[layer.key];
-                        const count = getCount(layer.dataKey, layer.catKey);
+                        const count = getCount(layer.dataKey, (layer as { catKey?: string }).catKey);
                         const Icon = layer.icon || Shield;
                         
                         return (

@@ -4,7 +4,8 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ['ws'],
   transpilePackages: ['react-map-gl', 'mapbox-gl', 'maplibre-gl'],
   typescript: {
-    ignoreBuildErrors: true,
+    // Type errors fail the build (upstream #289): the backlog is at zero, so keep it there.
+    ignoreBuildErrors: false,
   },
   images: {
     remotePatterns: [
