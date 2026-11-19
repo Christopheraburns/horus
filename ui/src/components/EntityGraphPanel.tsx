@@ -13,13 +13,14 @@ const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), { ssr: false 
 
 import { isSecured } from '@/lib/connectionMode';
 
-// GraphRAG question tiers (Phase 1 wired; 2-5 are planned/disabled).
+// GraphRAG question tiers. Only built tiers are listed; the gateway's
+// TIER_QUESTIONS (services/feeds-gateway/intel.py) has the full plan, and
+// BURNDOWN 11.4-11.8 tracks the rest:
+//   2 OPERATOR (operator footprint + sanctions), 3 SPATIAL (what is nearby now),
+//   4 PATTERN (folded into Pattern of Life), 5 ANOMALY (alerts from the detections job).
+// Add a tier back here when its gateway side is implemented.
 const INTEL_TIERS = [
   { n: 1, label: 'ATTRIBUTION', hint: 'Operator, registration country, aircraft type' },
-  { n: 2, label: 'OPERATOR', hint: 'Phase 2 (planned): operator footprint + sanctions' },
-  { n: 3, label: 'SPATIAL', hint: 'Phase 3 (planned): what is nearby right now' },
-  { n: 4, label: 'PATTERN', hint: 'Phase 4 (planned): pattern-of-life from history' },
-  { n: 5, label: 'ANOMALY', hint: 'Phase 5 (planned): anomaly / tipping' },
 ];
 
 interface IntelFact { subject: string; predicate: string; object: unknown; source: string; confidence?: unknown; }
@@ -481,13 +482,11 @@ function EntityGraphPanel({ entity, onClose }: Props) {
               {INTEL_TIERS.map((t) => (
                 <button
                   key={t.n}
-                  disabled={t.n !== 1 || intelLoading}
+                  disabled={intelLoading}
                   onClick={() => askIntel(t.n)}
                   title={t.hint}
                   className={`px-2 py-1 text-[8px] font-mono tracking-widest border rounded transition-colors ${
-                    t.n === 1
-                      ? 'border-[var(--cyan-primary)]/50 text-[var(--cyan-primary)] hover:bg-[var(--cyan-primary)]/10'
-                      : 'border-white/10 text-white/30 cursor-not-allowed'
+                    'border-[var(--cyan-primary)]/50 text-[var(--cyan-primary)] hover:bg-[var(--cyan-primary)]/10'
                   } ${intelTier === t.n ? 'bg-[var(--cyan-primary)]/15' : ''}`}
                 >
                   {t.n}. {t.label}

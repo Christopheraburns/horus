@@ -127,6 +127,11 @@ so flights also come from OpenSky. Both flows publish to the same topic.
 | 11.1 | Selecting another entity clears the previous Ask Horus and Pattern-of-Life results and aborts streams still running (browser to gateway to LLM) | No text from a previous asset appears | 1 | Done |
 | 11.2 | Short-lived gateway cache for Pattern of Life, keyed by entity, window and time bucket (about 10 min); the panel shows "generated N min ago" with a refresh button | A repeat request within the window returns instantly | 2 | Todo |
 | 11.3 | Record every generated answer (question, entity, facts used, model, timestamp) in an Iceberg table: an audit trail and lineage for AI output | Answers queryable in Trino | 3 | Todo |
+| 11.4 | Ask Horus tier 1 (Attribution) with real facts: gateway graph on Memgraph (C7) plus the offline aircraft database (12.3) for operator, type and registration; vessels too (MMSI country code, ShipStaticData, Memgraph by IMO) | Tier 1 answers with an operator and type for a typical airliner and a typical vessel | 3 | Todo |
+| 11.5 | Ask Horus tier 5 (Anomaly): the entity's alerts from the alerts topic (4.1, read by the gateway in 4.3) given to the LLM as facts | An entity with an alert gets an explanation of it | 2 | Todo |
+| 11.6 | Ask Horus tier 3 (Spatial): what is within N km now, from the gateway's live snapshot (aircraft, vessels, events, alerts), plus nearest port and maritime zone (12.4) | Answer names nearby entities with distances | 3 | Todo |
+| 11.7 | Ask Horus tier 2 (Operator): the operator's other assets from Memgraph, sanctions from `ref_sanctions` (12.5), registration-country context | Answer lists the fleet and any sanctions hit | 3 | Todo |
+| 11.8 | Tier 4 (Pattern): reuse Pattern of Life rather than build a second history answer; one panel, tiers relabelled to match what is built. Tiers 2–5 are hidden in the UI until each one is built (re-add to `INTEL_TIERS` as it lands) | No disabled placeholder buttons; every visible tier works | 1 | Todo |
 
 ## 12. Offline reference data
 
@@ -152,6 +157,6 @@ Catalog and refresh pattern: [docs/OFFLINE-DATA.md](docs/OFFLINE-DATA.md). Each 
 | C2 | Verify the NWS weather flow contributes rows | Todo |
 | C3 | `.project-metadata.yaml` (AMP) | Todo |
 | C4 | Fold RUNBOOK.md into INSTALL.md | Todo |
-| C7 | Captured-graph gap: the gateway's `graph.py` expects a Neo4j that Horus doesn't run | Todo |
+| C7 | Captured-graph gap: the gateway's `graph.py` expects a Neo4j that Horus doesn't run (blocks Ask Horus tier 1, 11.4) | Todo |
 | C8 | Optional: delete the unused `horus_hive` SSB catalog and old `osiris-*` Docker Hub images | Todo |
 | C9 | UI status bar: `V.4.1` label and the `NEO4J` button that points at localhost | Todo |
