@@ -349,7 +349,7 @@ box, on pixels valid in both:
 | ID | Item | Done when | Est | Status |
 |---|---|---|---|---|
 | D1 | `SHA256SUMS` and `MANIFEST.md` as in the output contract | Both written | 0.5 | Done |
-| D2 | Hand-off: copy the files to where the Horus tile server can read them (decided with the owner; for now, upload into `horus/services/tileserver/` in the Workbench project, or object storage), and send the manifest | Files at the destination, checksums verified there | 1 | Todo |
+| D2 | Hand-off: copy the files to where the Horus tile server can read them | – | – | Moved: replaced by E1 (convert to PMTiles) and E2 (copy to object storage); never into the Workbench project |
 | D3 | Commit the scripts (`imagery/scripts/`) and the final stretch values to the repo; never commit the imagery itself (`.gitignore` already covers `*.mbtiles`) | Scripts in git | 0.5 | Todo |
 
 #### D1 results (2026-11-19)
@@ -371,6 +371,54 @@ Results:
   `sha256sum -c` verifies.
 - **If any file changes,** re-run `delivery.sh`.
 - **The set to hand off is exactly the contents of `out/`.**
+
+### E. Hand-off to Horus object storage
+
+Decided 2026-11-19 (Horus burndown section 8): Horus serves imagery from the
+environment's object storage as **PMTiles**, one file per tile set, read by
+HTTP range requests. MBTiles is SQLite and needs a normal filesystem, so it
+stays on this workstation. The files go from here straight to the bucket,
+never through a browser upload or the Workbench project.
+
+| ID | Item | Done when | Est | Status |
+|---|---|---|---|---|
+| E1 | Convert the 7 MBTiles to PMTiles and check them: `scripts/to_pmtiles.sh` | The script ends with "All 7 files converted and checked" | 1 | Todo |
+| E2 | Copy the 7 PMTiles and their `SHA256SUMS` to the instance's bucket prefix and verify the checksums there | Checksums verified in the bucket | 1 | Blocked: waiting for the bucket path and how this workstation authenticates to it (Horus 8.1 and 8.9) |
+
+#### E1: how to run it
+
+From a WSL2 shell, in the `imagery` folder of the horus repo (pull first):
+
+```bash
+git pull
+df -h ~                      # needs about 16 GB free (the PMTiles are about the size of the MBTiles)
+scripts/to_pmtiles.sh
+```
+
+For each `~/horus-imagery/out/horus-imagery-*.mbtiles` it:
+
+1. converts it with `pmtiles convert`, run from the Docker image
+   `protomaps/go-pmtiles:v1.31.2`, so nothing is installed;
+2. runs `pmtiles verify` on the result;
+3. runs the Horus tile service's own checks on it
+   (`services/tileserver/tilestore.py`: metadata present, tiles in the declared
+   format, valid zooms and bounds), so a file that passes here will be served;
+4. checks the PMTiles says what the MBTiles said: format, zooms, bounds,
+   attribution.
+
+Output goes to `~/horus-imagery/out/pmtiles/`: the 7 `.pmtiles` files and a
+`SHA256SUMS` covering them. That folder is the hand-off set for E2. The global
+file is the long one (12.5 GB; expect tens of minutes); a re-run skips files
+already converted and checked.
+
+**If a file fails, don't fix it by hand and don't upload it**: send the
+output. One failure to know about: if the tile service's check says the
+PMTiles header's maxzoom differs from its metadata, the map would stop at the
+lower zoom. A long run of identical tiles (empty ocean, for example) can cause
+this in the converter, and `pmtiles edit` can't fix it cleanly.
+
+To check any single file the way the tile service will:
+`python3 ../services/tileserver/tilestore.py FILE`.
 
 ## Not in this package (done on the Horus side)
 

@@ -32,7 +32,9 @@ def tile(fmt: str, colour) -> bytes:
     return buf.getvalue()
 
 
-def mbtiles(path: str, meta: dict, data: bytes, maxzoom: int = 2) -> None:
+def mbtiles(path: str, meta: dict, data, maxzoom: int = 2) -> None:
+    """``data``: one tile's bytes, or a function (z, x, y) -> bytes. Real imagery has a
+    different tile at almost every position; identical tiles are stored once in PMTiles."""
     if os.path.exists(path):
         os.remove(path)
     db = sqlite3.connect(path)
@@ -42,29 +44,28 @@ def mbtiles(path: str, meta: dict, data: bytes, maxzoom: int = 2) -> None:
     for z in range(maxzoom + 1):
         for x in range(2 ** z):
             for y in range(2 ** z):
-                db.execute("INSERT INTO tiles VALUES (?, ?, ?, ?)", (z, x, y, data))
+                tile_bytes = data(z, x, y) if callable(data) else data
+                db.execute("INSERT INTO tiles VALUES (?, ?, ?, ?)", (z, x, y, tile_bytes))
     db.commit()
     db.close()
 
 
 webp = tile("WEBP", (40, 90, 60))
+
+
+def distinct_webp(z, x, y):
+    return tile("WEBP", (40 + 60 * z, 10 * x % 256, 10 * y % 256))
 for name, b in REGIONS.items():
     mbtiles(os.path.join(out, f"horus-imagery-{name}.mbtiles"),
             {"name": f"horus-imagery-{name}", "format": "webp", "minzoom": "0", "maxzoom": "2",
              "bounds": ",".join(map(str, b)), "attribution": WORLDCOVER,
-             "description": f"Horus offline imagery: {name}"}, webp)
+             "description": f"Horus offline imagery: {name}"}, distinct_webp)
 glob_mb = os.path.join(out, "global.tmp.mbtiles")
 mbtiles(glob_mb, {"name": "horus-imagery-global", "format": "webp", "minzoom": "0", "maxzoom": "2",
                   "bounds": "-180,-85.0511,180,85.0511", "attribution": WORLDCOVER,
-                  "description": "Horus offline imagery: global"}, webp)
-pm = os.path.join(out, "horus-imagery-global.pmtiles")
-mbtiles_to_pmtiles(glob_mb, pm, maxzoom=2)
+                  "description": "Horus offline imagery: global"}, distinct_webp)
+mbtiles_to_pmtiles(glob_mb, os.path.join(out, "horus-imagery-global.pmtiles"), maxzoom=2)
 os.remove(glob_mb)
-# The Python converter writes header maxzoom 0 although the tiles go to z2 (the Go
-# `pmtiles convert` used for real files gets it right): set byte 101, the header's maxzoom.
-with open(pm, "r+b") as f:
-    f.seek(101)
-    f.write(bytes([2]))
 
 with open(os.path.join(out, "corrupt.pmtiles"), "wb") as f:
     f.write(b"this is not a PMTiles archive" * 10)

@@ -162,8 +162,8 @@ def read_pmtiles(read: Callable[[int, int], bytes]) -> tuple[dict, list]:
     for key, have in (("minzoom", minzoom), ("maxzoom", maxzoom)):
         stated = str(extra.get(key, "")).strip()
         if stated.isdigit() and int(stated) != have:
-            problems.append(f"PMTiles header {key} is {have} but its metadata says {stated}; "
-                            "re-convert it with `pmtiles convert`")
+            problems.append(f"PMTiles header {key} is {have} but its metadata says {stated}, so the map "
+                            f"would use z{have}; long runs of identical tiles can cause this in conversion")
     _check_common(meta, problems)
     return meta, problems
 
@@ -178,3 +178,22 @@ def read_metadata(path: str) -> tuple[dict, list]:
         return read_mbtiles(path)
     except OSError as e:
         return {}, [f"unreadable ({e})"]
+
+
+def main(argv: list) -> int:
+    """Check tile files as the tile service will: python3 tilestore.py FILE [FILE ...]."""
+    bad = 0
+    for path in argv:
+        meta, problems = read_metadata(path)
+        name = os.path.basename(path)
+        if problems:
+            bad += 1
+            print(f"FAIL {name}: {'; '.join(problems)}")
+        else:
+            print(f"ok   {name}: {meta['format']}, z{meta['minzoom']}-{meta['maxzoom']}, bounds {meta['bounds']}")
+    return 1 if bad else 0
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main(sys.argv[1:]))
