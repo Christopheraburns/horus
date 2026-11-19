@@ -18,6 +18,7 @@ import logging
 import math
 import os
 import time
+import uuid
 from typing import Any, AsyncIterator
 
 import httpx
@@ -82,7 +83,11 @@ def _lake_asset_id(entity: dict) -> str:
     return str(entity.get("icao24") or entity.get("callsign") or "").strip()
 
 
-async def _resolve_graph(entity: dict) -> dict:
+def _ms(since: float) -> int:
+    return int((time.monotonic() - since) * 1000)
+
+
+async def _resolve_graph(entity: dict, trace_id: str = "") -> dict:
     """horus-intel /resolve for operator/owner/flag/sanctions (Secure Mode → Memgraph)."""
     if (entity.get("type") or "").lower() == "vessel":
         rid = str(entity.get("imo") or entity.get("mmsi") or "").strip()
@@ -98,7 +103,8 @@ async def _resolve_graph(entity: dict) -> dict:
             params[k] = entity[k]
     try:
         async with httpx.AsyncClient(timeout=15) as c:
-            r = await c.get(f"{INTEL_RESOLVER_URL}/resolve", params=params)
+            r = await c.get(f"{INTEL_RESOLVER_URL}/resolve", params=params,
+                            headers={"X-Trace-Id": trace_id} if trace_id else None)
             if r.status_code == 200:
                 d = r.json()
                 return {"nodes": d.get("nodes", []), "links": d.get("links", [])}
@@ -198,6 +204,10 @@ def _facts_block(facts: list[dict]) -> str:
 async def stream(entity: dict, window_hours: Any = None) -> AsyncIterator[bytes]:
     """Run the Pattern-of-Life pipeline and stream NDJSON events."""
     started = time.monotonic()
+    trace_id = uuid.uuid4().hex[:12]
+    # Milliseconds per stage, logged with the trace id so a slow request can be
+    # taken apart: resolve -> bounds -> track -> llm (first token, then the rest).
+    timings: dict[str, Any] = {}
     subject = (
         entity.get("callsign") or entity.get("name") or entity.get("mmsi")
         or entity.get("icao24") or "asset"
@@ -212,7 +222,9 @@ async def stream(entity: dict, window_hours: Any = None) -> AsyncIterator[bytes]
 
     # 1) graph/entity context (operator/owner/flag/sanctions) — often empty for a
     #    live asset, since the reference graph holds orgs/airlines/vessels-by-IMO.
-    sub = await _resolve_graph(entity)
+    t = time.monotonic()
+    sub = await _resolve_graph(entity, trace_id)
+    timings["resolve_ms"] = _ms(t)
     gfacts = _graph_facts(str(subject), sub)
     if gfacts:
         facts += gfacts
@@ -228,14 +240,19 @@ async def stream(entity: dict, window_hours: Any = None) -> AsyncIterator[bytes]
     track: list[dict] = []
     if aid and history.configured():
         try:
+            t = time.monotonic()
             b = await asyncio.to_thread(history.bounds)
+            timings["bounds_ms"] = _ms(t)
             end = int(b.get("max_time") or int(time.time() * 1000))
             start = end - int(hours * 3_600_000)
+            t = time.monotonic()
             track = await asyncio.to_thread(history.asset_track, aid, start, end)
+            timings["track_ms"] = _ms(t)
         except Exception as exc:  # noqa: BLE001
             log.warning("asset_track failed: %s", exc)
     facts += _track_features(str(subject), track)
 
+    timings["facts_ms"] = _ms(started)   # when the UI gets the facts
     yield _line({"type": "facts", "facts": facts, "subgraph": sub, "model": llm.OLLAMA_MODEL})
 
     # 3) grounded narrative
@@ -248,12 +265,20 @@ async def stream(entity: dict, window_hours: Any = None) -> AsyncIterator[bytes]
         "source tags."
     )
     parts: list[str] = []
+    t = time.monotonic()
     async for token in llm.chat_stream(SYSTEM_PROMPT, user_prompt):
+        if not parts:
+            timings["llm_first_token_ms"] = _ms(t)
         parts.append(token)
         yield _line({"type": "token", "text": token})
+    timings["llm_total_ms"] = _ms(t)
+    timings["llm_chunks"] = len(parts)
+    timings["prompt_chars"] = len(SYSTEM_PROMPT) + len(user_prompt)
 
-    latency = int((time.monotonic() - started) * 1000)
-    yield _line({"type": "done", "latency_ms": latency})
+    latency = _ms(started)
+    log.info("pattern-of-life %s trace=%s total=%d ms %s", subject, trace_id, latency,
+             " ".join(f"{k}={v}" for k, v in timings.items()))
+    yield _line({"type": "done", "latency_ms": latency, "trace_id": trace_id, "timings": timings})
 
     db.log_row(
         "info", "patternoflife", f"pattern-of-life: {subject}",
@@ -265,6 +290,8 @@ async def stream(entity: dict, window_hours: Any = None) -> AsyncIterator[bytes]
             "window_hours": hours,
             "answer": "".join(parts)[:2000],
             "latency_ms": latency,
+            "trace_id": trace_id,
+            "timings": timings,
             "model": llm.OLLAMA_MODEL,
         },
     )
