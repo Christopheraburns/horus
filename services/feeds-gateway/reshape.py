@@ -121,6 +121,9 @@ def reshape_fire(rec: dict) -> dict:
     props = _as_dict(entity.get("properties"))
 
     item = {
+        # The store key: without it every re-send of a fire (FIRMS repeats its
+        # 24 h window on each poll) became a separate point on the map.
+        "id": entity.get("id"),
         "lat": _first(position.get("lat"), entity.get("lat")),
         "lng": _first(position.get("lng"), entity.get("lng")),
         "brightness": props.get("brightness"),

@@ -119,6 +119,42 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
     map.addImage(id, { width: size, height: size, data: new Uint8Array(ctx.getImageData(0, 0, size, size).data) });
   }, []);
 
+  // Fire marker: a small flame, drawn here so it needs no image files (air-gap safe).
+  // Paths are in a 32-unit box, drawn at 2x for sharp edges on high-DPI screens.
+  const createFlame = useCallback((map: maplibregl.Map, id: string) => {
+    if (map.hasImage(id)) return;
+    const px = 64;
+    const canvas = document.createElement('canvas');
+    canvas.width = px; canvas.height = px;
+    const ctx = canvas.getContext('2d')!;
+    ctx.scale(px / 32, px / 32);
+    const outer = new Path2D();
+    outer.moveTo(16, 2);
+    outer.bezierCurveTo(19, 9, 27, 13, 27, 21);
+    outer.bezierCurveTo(27, 27.5, 22, 31, 16, 31);
+    outer.bezierCurveTo(10, 31, 5, 27.5, 5, 21);
+    outer.bezierCurveTo(5, 16, 8, 13, 10, 10);
+    outer.bezierCurveTo(10.5, 13, 11.5, 15, 13, 16);
+    outer.bezierCurveTo(13, 11, 14, 6, 16, 2);
+    outer.closePath();
+    const og = ctx.createLinearGradient(0, 2, 0, 31);
+    og.addColorStop(0, '#FF7A1A'); og.addColorStop(1, '#E3260B');
+    ctx.fillStyle = og; ctx.fill(outer);
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 0.8; ctx.stroke(outer);
+    const inner = new Path2D();
+    inner.moveTo(16, 14);
+    inner.bezierCurveTo(18, 18, 22, 20, 22, 24.5);
+    inner.bezierCurveTo(22, 28, 19.5, 30, 16, 30);
+    inner.bezierCurveTo(12.5, 30, 10, 28, 10, 24.5);
+    inner.bezierCurveTo(10, 21, 13, 19, 16, 14);
+    inner.closePath();
+    const ig = ctx.createLinearGradient(0, 14, 0, 30);
+    ig.addColorStop(0, '#FFE27A'); ig.addColorStop(1, '#FFB300');
+    ctx.fillStyle = ig; ctx.fill(inner);
+    map.addImage(id, { width: px, height: px, data: new Uint8Array(ctx.getImageData(0, 0, px, px).data) },
+                 { pixelRatio: px / 32 });
+  }, []);
+
   useEffect(() => {
     if (!mapRef.current) return;
     const map = mapRef.current;
@@ -226,7 +262,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
       createDot(map, 'dot-red', '#D32F2F', 10);
       createDot(map, 'dot-orange', '#E65100', 10);
       createDot(map, 'dot-green', '#26A69A', 10);
-      createDot(map, 'dot-fire', '#E65100', 10);
+      createFlame(map, 'fire-flame');
       createDot(map, 'dot-cctv', cameraColor, 10);
 
       const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','sigint-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'malware-nodes', 'network-mesh', 'timetravel'];
@@ -283,10 +319,11 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         'text-field': ['concat','M',['to-string',['get','magnitude']]], 'text-size': 9, 'text-font': ['Noto Sans Regular'], 'text-offset': [0,1.5],
       }, paint: { 'text-color': '#F9A825', 'text-halo-color': '#000', 'text-halo-width': 1 }});
 
-      // Fires — burnt sienna
-      map.addLayer({ id: 'fires-heat', type: 'circle', source: 'fires', paint: {
-        'circle-radius': ['interpolate',['linear'],['zoom'], 1,2, 5,4, 10,8],
-        'circle-color': '#E65100', 'circle-opacity': 0.45, 'circle-blur': 0.5,
+      // Fires — a flame icon, so they don't read as the orange vessel dots
+      map.addLayer({ id: 'fires-heat', type: 'symbol', source: 'fires', layout: {
+        'icon-image': 'fire-flame',
+        'icon-size': ['interpolate',['linear'],['zoom'], 1,0.3, 5,0.5, 10,0.8],
+        'icon-allow-overlap': true, 'icon-ignore-placement': true,
       }});
 
       // CCTV — outer glow ring (black/white depending on theme)
@@ -703,10 +740,22 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
       if (!e.features?.length) return;
       const p = e.features[0].properties as any;
       const coords = (e.features[0].geometry as any).coordinates;
+      const volcano = p.type === 'volcano';
+      // VIIRS confidence is l / n / h; MODIS gives a percentage.
+      const conf = ({ l: 'LOW', n: 'NOMINAL', h: 'HIGH' } as Record<string, string>)[String(p.confidence).toLowerCase()]
+        ?? (p.confidence ? `${p.confidence}%` : '—');
+      const hhmm = String(p.time ?? '').padStart(4, '0');
+      const detected = p.date ? `${p.date}${/^\d{4}$/.test(hhmm) ? ` ${hhmm.slice(0, 2)}:${hhmm.slice(2)}` : ''} UTC` : '—';
       popup(coords, `<div style="${pStyle}border:1px solid rgba(255,107,0,0.3);">
-        <div style="color:#FF6B00;font-size:12px;font-weight:700;margin-bottom:6px;">🔥 ACTIVE FIRE DETECTED</div>
+        <div style="color:#FF6B00;font-size:12px;font-weight:700;margin-bottom:4px;">${volcano ? '🌋 VOLCANO' : 'THERMAL ANOMALY'}</div>
+        <div style="color:#8A877F;font-size:9px;margin-bottom:8px;max-width:240px;">${volcano
+          ? htmlEsc(p.title || 'NASA EONET volcano event')
+          : 'Satellite heat detection (NASA FIRMS, VIIRS). Usually a fire; can also be a gas flare, volcano or industrial heat source.'}</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:9px;margin-bottom:8px;">
-          <div><span style="color:#5C5A54;">BRIGHTNESS</span><br/><span style="color:#FF6B00;">${p.brightness||'—'}K</span></div>
+          ${volcano ? '' : `<div><span style="color:#5C5A54;">CONFIDENCE</span><br/><span style="color:#FF6B00;">${htmlEsc(conf)}</span></div>
+          <div><span style="color:#5C5A54;">FIRE POWER</span><br/><span style="color:#FF6B00;">${p.frp != null && p.frp !== '' ? `${htmlEsc(p.frp)} MW` : '—'}</span></div>
+          <div><span style="color:#5C5A54;">DETECTED</span><br/><span style="color:#E8E6E0;">${htmlEsc(detected)}</span></div>
+          <div><span style="color:#5C5A54;">BRIGHTNESS</span><br/><span style="color:#E8E6E0;">${p.brightness ? `${htmlEsc(p.brightness)} K` : '—'}</span></div>`}
           <div><span style="color:#5C5A54;">COORDS</span><br/><span style="color:#E8E6E0;">${coords[1].toFixed(3)}°, ${coords[0].toFixed(3)}°</span></div>
         </div>
       </div>`);
@@ -1079,7 +1128,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
 
   useEffect(() => {
     if (!mapReady) return;
-    setGeo('fires', activeLayers.fires && data.fires ? data.fires.map((f: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [f.lng, f.lat] }, properties: { brightness: f.brightness } })) : []);
+    setGeo('fires', activeLayers.fires && data.fires ? data.fires.map((f: any) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [f.lng, f.lat] }, properties: { brightness: f.brightness, confidence: f.confidence, frp: f.frp, date: f.date, time: f.time, type: f.type, title: f.title } })) : []);
   }, [mapReady, data.fires, activeLayers.fires, setGeo]);
 
   useEffect(() => {
