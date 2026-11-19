@@ -85,20 +85,46 @@ Inventory and details: [docs/AIRGAP.md](docs/AIRGAP.md). Image and install-time 
 | 7.9 | Sync the browser's SOURCE flag with the server (intel `secure=1`) | Toggle changes intel source | 1 | Todo |
 | 7.10 | Splash screen removed; fly-to-city disabled (code kept) | Done 2026-11-18 | 0.5 | Done |
 
-## 8. Offline satellite imagery (Horus side)
+## 8. Imagery and tile sets (Horus side)
 
-The imagery tiles are built separately, on another machine:
-[imagery/BURNDOWN-IMAGERY.md](imagery/BURNDOWN-IMAGERY.md) (ESA WorldCover 2021,
-10 m; global base plus regions of interest to zoom 14, delivered as raster
-MBTiles). These items connect them to Horus.
+The imagery package ([imagery/BURNDOWN-IMAGERY.md](imagery/BURNDOWN-IMAGERY.md))
+has produced its delivery set: 7 raster MBTiles, 16.05 GB, with `MANIFEST.md`
+and `SHA256SUMS`. The global base (`horus-imagery-global`, z0–10, 12.46 GB) and
+six regions to z14 (`hormuz`, `taiwan-strait`, `bosporus`, `crimea`,
+`channel`, `hampton-roads`) are ESA WorldCover 2021, WebP with transparent
+ocean, and carry their attribution in the file metadata.
+
+This section connects them to Horus, and does it as a **tile-set registry**
+rather than one hard-coded basemap. The registry is one list of tile sets; each is either a file
+served by the Horus tile server or a customer's own tile server URL. Each entry
+carries its licence and attribution, security marking and capture date, and the
+UI builds its map layers from the list. That is how a customer brings their own
+imagery: licensed sub-metre imagery, drone orthomosaics, post-event imagery.
+
+Design notes:
+- Most serious customers have a tile *server* (GeoServer, ArcGIS
+  Enterprise, a national imagery service) more often than files, so URLs are first-class
+  entries, not an afterthought.
+- Fresh imagery usually arrives as GeoTIFF/COG, NITF or GeoPackage, not
+  MBTiles. The real import is a conversion step (8.7).
+- MBTiles is SQLite, so the tile server needs the file on a normal
+  filesystem, not in object storage. Moving multi-gigabyte files is the hard
+  part; 8.1 decides it and blocks the rest.
+- Adding a file means restarting the tile server, which takes seconds
+  (tileserver-gl-light does not reload its config).
 
 | ID | Item | Done when | Est | Status |
 |---|---|---|---|---|
-| 8.1 | Tile server `config.json`: add each imagery MBTiles as a data source; check the served TileJSON | `/data/horus-imagery-*.json` served | 1 | Todo |
-| 8.2 | UI: imagery as a MapLibre raster layer from the Horus tile server; the satellite button returns in PIPELINE mode and uses it (PUBLIC mode can still use Esri) | Satellite view works with egress blocked | 3 | Todo |
-| 8.3 | Map attribution for ESA WorldCover / Copernicus (CC BY 4.0) shown whenever the imagery is visible | Attribution visible | 0.5 | Todo |
-| 8.4 | Setting for a customer's own imagery server (`IMAGERY_TILE_URL`), read at run time | One setting switches the source | 1 | Todo |
-| 8.5 | Where the imagery files live in Workbench (project storage, a volume, or object storage) and how they get there | Decided and documented in INSTALL.md | 1 | Todo |
+| 8.1 | Where tile files live in Workbench and how they get there: project storage (check the quota for 16 GB), a mounted volume, or object storage plus a copy job; never through the browser upload. Hand off the delivery set (imagery D2) and verify it in place with `sha256sum -c` | Decided and documented in INSTALL.md; the 7 files verified at the destination | 2 | Todo |
+| 8.2 | Registry format: one list of tile sets with id, kind (`file` or `url`), role (imagery, vector basemap or overlay), title, attribution and licence, marking, capture date or date range, bounds, zoom range and stacking order. File entries are filled from the MBTiles `metadata` table; a small override file holds what the metadata lacks (marking, capture date) | Format written down, with the 7 delivered files as the example | 2 | Todo |
+| 8.3 | Tile server builds its config from the registry: on start, `serve-tiles.py` scans the tile folder, reads each MBTiles' metadata, validates it (raster or vector as declared, Web Mercator, metadata present) and writes `config.json`. A bad file is skipped with a clear log line, not a failed start | The 7 files served with TileJSON at `/data/<id>.json`; a deliberately broken file is reported and skipped | 4 | Todo |
+| 8.4 | UI layers from the registry at run time: imagery as MapLibre raster sources, global under regional, each limited to its bounds so tiles outside are never requested. The satellite button returns in PIPELINE mode and uses it (PUBLIC mode can still use Esri) | Satellite view works with egress blocked; a new file appears after a tile-server restart, with no UI rebuild | 4 | Todo |
+| 8.5 | Attribution and marking on the map for every visible tile set (ESA WorldCover / Copernicus, CC BY 4.0, for the delivered set); markings follow section 13 | Attribution and marking visible whenever the layer is | 1 | Todo |
+| 8.6 | Customer tile servers as registry entries of kind `url` (XYZ, TMS, WMTS), replacing the single `IMAGERY_TILE_URL` setting planned before; servers that need credentials go through a Horus proxy so the browser never holds them. In an air-gapped site these are enclave servers only (DEPLOYMENT-MODEL.md) | One registry entry adds a customer server's imagery to the map | 3 | Todo |
+| 8.7 | Import fresh imagery: a Workbench job that turns a GeoTIFF or COG (later NITF and GeoPackage) into a tile file using the imagery package's recipe (`region.sh`, `finish_mbtiles.py`; the stretch only for raw reflectance, not for imagery that is already 8-bit RGB), then registers it with its capture date | A customer-style GeoTIFF becomes a registered tile set with one command | 8 | Todo |
+| 8.8 | Dated imagery: the layer list shows each tile set's capture date, and Time Travel picks the tile set nearest the replay time where several cover the same place | Replaying a past date shows the imagery from that date | 4 | Todo |
+| 8.9 | Option for very large sets: PMTiles in object storage (S3 or Ozone), read by HTTP range requests through a small proxy, so nothing is copied into Workbench. Decide after 8.1 | Decision recorded; if chosen, one region served from object storage | 6 | Todo |
+| 8.10 | Self-service upload page in the UI | – | – | Cut: multi-gigabyte uploads through the Workbench ingress are fragile, and adding imagery is an admin action with markings; use 8.1's transfer route and 8.7 instead |
 
 ## 9. Flight sources
 
