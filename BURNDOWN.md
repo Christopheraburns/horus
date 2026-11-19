@@ -166,34 +166,27 @@ Design: [docs/DEPLOYMENT-MODEL.md](docs/DEPLOYMENT-MODEL.md). Boundary rule: no 
 | 13.6 | Markings in the UI: the gateway queries as the signed-in user (needs SSO, BURNDOWN-DEPLOY), and popups show each record's marking | A restricted record is absent for one user and marked for the other | 4 | Todo |
 | 13.7 | MISB/KLV video: parse KLV from a sample MPEG-TS file (sensor position, frame footprint, time) into `camera_segments`, and draw the footprint on the map | A sample FMV clip shows its ground footprint moving on the map | 6 | Todo |
 
-## 14. Ontology (Foundry-shaped)
+## 14. Ontology (Helios semantic models plus an operational ontology)
 
-Plan: [docs/ONTOLOGY_PLAN.md](docs/ONTOLOGY_PLAN.md). Object types, link types and interfaces; actions as the only write path; functions that propose edits; object and property policies applied inside object sets; Ontology Manager, Object Explorer and a generated client. Estimates in this section are the plan's **points** (relative weight, 199 total), not hours.
+Plan: [docs/ONTOLOGY_PLAN.md](docs/ONTOLOGY_PLAN.md). One stack: object types bound to Helios (Ossie) datasets and metrics; entities indexed and editable, observations read in place from Iceberg; actions as the only write path; policies that only narrow what Ranger allows; Flink results as machine-actor actions. Most work happens in the Helios repo, with Horus as the first host; the split is still being settled (the plan's "Helios or Horus" section). Estimates here are the plan's **points** (220 total), not hours. The plan moves to the Helios repo when work starts.
 
-**Horus adaptations** (decisions made when adding the plan; the plan doc is unchanged):
-- **Helios:** use `helios-cortex` (Apache-2.0, `~/code/helios`) as a pip dependency, not copied code: the Trino engine with caller identity (impersonate/token) and its `DataPolicy` for the indexer and the read path; the SQLGlot compiler as the base for compiling object sets to SQL; the registry's SQLAlchemy/Alembic setup for the definition store. Its entity resolver (`SameAs` / `PossiblySameAs` with evidence) is the starting point for the entity-resolution increment. Helios's LinkML ontology is **not** the definition format: the plan's YAML carries actions, link backings and policies, which LinkML doesn't; a LinkML/OWL export can come later.
-- **Stack:** backend packages (definition, storage, query, actions, functions, security) in Python, so they share Helios, the gateway and the function runner. Manager and Explorer in Next.js. This differs from the plan's "TypeScript services" line.
-- **Datasources:** the backing datasets are Horus Iceberg tables read through Trino as the caller (`events`, `ref_*`, alerts, detections). The definition store, edit log and object index are Postgres, as planned. Postgres needs a home on CDP (a Workbench Application like Memgraph, or a managed instance): decide in O0.
-- **History:** the edit log and the action log are also copied to Iceberg, so Time Travel covers analyst edits (pairs with 11.3, the AI answer audit trail).
-- **Governance:** the mandatory-control hook (S8) is where Ranger and Atlas markings plug in (13.4–13.5). Per-user reads need SSO and per-user identity (BURNDOWN-DEPLOY C1, C2); until then the hook is allow-all, as the plan says.
-- **Seed:** the plan's OSINT seed (Person, Organization, Document, Claim and so on) proves the mechanism. A second, Horus seed (O13) maps the live domain: Vessel, Aircraft, Organization, Port, Alert, Encounter, Sanction. Ask Horus tiers (11.4–11.7) and the Prime Agent (5) then read object sets instead of raw tables.
-
-| ID | Item (plan sprint) | Done when | Pts | Status |
+| ID | Item | Owner | Pts | Status |
 |---|---|---|---|---|
-| O0 | Decisions before S0: Postgres hosting on CDP, package layout under `ontology/` in this repo, `helios-cortex` version pin, where the Python services run (one Workbench Application or folded into the gateway) | Decisions written into the plan's Horus section | – | Todo |
-| O1 | S0 Foundations: ids and API names, space/ontology/branch with change sets, metadata schema and migrations, audit, base type catalog with key rules | Definition YAML round-trips; a branch commits on save | 13 | Todo |
-| O2 | S1 Object types and properties: primary and title keys, column mapping, unbacked types, shared properties, value types | An Iceberg table maps to an object type | 21 | Todo |
-| O3 | S2 Link types: two named sides; foreign key, join table and object-backed | All three backings declared and validated | 13 | Todo |
-| O4 | S3 Interfaces: extends, conformance, link and action constraints | `Actor` implemented by two types and checked | 8 | Todo |
-| O5 | S4 Object storage: indexer from Trino (as the caller, via Helios), edit log, read merge, post-commit index update, optional materialization, datasource replacement | A read returns table rows merged with edits | 21 | Todo |
-| O6 | S5 Object sets: IR, filters (including geopoint bbox), aggregations, sort/page/project, interface sets, search-around on all backings | Object sets answer through the API with no table names | 21 | Todo |
-| O7 | S6 Actions: parameters, rules folded to one edit per object, illegal-combination rejection, submission criteria, transactional apply and action log | An action writes; a failed criterion returns its message | 21 | Todo |
-| O8 | S7 Functions: versioned registry, query functions, edit functions that return a batch (test for the pre-batch search rule), exclusive function rule, version pin | A function-backed action writes; a direct run doesn't | 13 | Todo |
-| O9 | S8 Governance: roles on types, object and property policies (weight limit), mandatory-control hook, enforcement inside object sets, policy test | Hidden object vs nulled property proven by tests | 13 | Todo |
-| O10 | S9 Side effects: before/after webhooks, post-commit notifications from pre-edit state, usage counters, criteria test run | Webhook failure rules covered by tests | 8 | Todo |
-| O11 | S10 Ontology Manager (Next.js) | A type, link and action are built in the UI and saved on a branch | 21 | Todo |
-| O12 | S11 Object Explorer and object views; Horus map popups link to the object view | Analyst finds an object and runs an action on it | 13 | Todo |
-| O13 | S12 Generated client, scoped app token, OSINT seed; plus the Horus seed (Vessel, Aircraft, Organization, Port, Alert, Encounter, Sanction over the lake and `ref_*` tables) | Both seeds load; the Horus UI reads vessels through an object set | 13 | Todo |
+| O0 | Settle the Helios/Horus split: the six open boundaries in the plan (reusable server, stream adapter, Postgres requirement, applications, domain packs, timing against Helios phases 9 and 10) | Both | – | Todo |
+| O1 | S0 Foundations: ids, branches and revisions in the Helios registry, schema, layering, audit, base types | Helios | 13 | Todo |
+| O2 | S1 Object types over Ossie: kinds, properties bound to fields, value types, metrics on types | Helios | 21 | Todo |
+| O3 | S2 Links and interfaces, plus `OntologyGraph`/LinkML generated for compatibility | Helios | 21 | Todo |
+| O4 | S3 Proposals and review for object types and links | Helios | 13 | Todo |
+| O5 | S4 Entity storage: indexer, upserts, edit log, merge, logs copied to Iceberg | Helios | 21 | Todo |
+| O6 | S5 Object sets, observations compiled through Helios as the caller | Helios | 21 | Todo |
+| O7 | S6 Actions, including machine actors and proposal-only actions | Helios | 21 | Todo |
+| O8 | S7 Functions (runner process in Horus) | Both | 13 | Todo |
+| O9 | S8 Governance, including policies compiled to Ranger | Helios | 16 | Todo |
+| O10 | S9 Side effects and commit stream (Kafka adapter in Horus) | Both | 8 | Todo |
+| O11 | S10 Ontology tools (Helios) and HTTP API (Horus) | Both | 13 | Todo |
+| O12 | S11 Instance proposals and entity resolution (crawler records, SameAsAssertion, merge, MMSI/IMO/ICAO identity) | Helios | 13 | Todo |
+| O13 | S12 Horus host: service, Postgres, sign-in caller (BURNDOWN-DEPLOY C1, C2), Kafka adapter, Flink alerts as actions, object view and map popups | Horus | 13 | Todo |
+| O14 | S13 Seeds: OSINT pack and the Horus maritime/aviation extension; Ask Horus tier 1 on an object set (11.4) | Both | 13 | Todo |
 
 ## Carried over
 
