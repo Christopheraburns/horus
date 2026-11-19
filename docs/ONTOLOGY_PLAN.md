@@ -13,7 +13,7 @@ The work is expected to happen mostly in the Helios repo, with Horus as the firs
 
 **Domain-neutral by design.** Horus is the first host, not the only one. The same ontology and Helios should serve unrelated projects, for example a car manufacturer managing plants, lines, machines, parts, lots and vehicles. Helios holds the mechanics; everything domain-specific lives in packs and host extensions; identity, location and time are declared in the definition rather than written into code. A manufacturing test pack ([Seeds](#manufacturing-test-pack)) checks this: if modelling a factory needs a change to the core, the core was too Horus-shaped.
 
-Points are relative engineering weight, not calendar time. The plan is 14 sprints and 245 points.
+Points are relative engineering weight, not calendar time. The plan is 16 sprints and 270 points.
 
 ## Contents
 
@@ -39,8 +39,8 @@ Points are relative engineering weight, not calendar time. The plan is 14 sprint
 ```mermaid
 flowchart TB
   subgraph apps [Applications and agents]
-    horusui[Horus map and object views]
-    explorer[Object explorer]
+    horusui[Host applications: the Horus map, workflows]
+    explorer[Helios ontology components: object view, explorer, action form, review]
     agents[LLM agents over MCP]
   end
 
@@ -78,7 +78,7 @@ flowchart TB
 
 | Layer | Answers | Built from |
 |---|---|---|
-| Applications and agents | Show, explain, act | Each host's applications (in Horus: the map, object views, MCP tools for Mistral, the Prime Agent) |
+| Applications and agents | Show, explain, act | Helios's ontology components (object view, explorer, action form, review), composed by each host's applications (in Horus: the map, MCP tools for Mistral, the Prime Agent) |
 | Ontology | What things exist, how they relate, who may change or see them | This plan |
 | Semantic model | What the data means; how a number is computed | Helios (Ossie format), proposed from the warehouse and reviewed by a person |
 | Physical | Where the data is | Iceberg tables, Kafka topics, Postgres, Memgraph |
@@ -470,8 +470,10 @@ The reviewer accepts, edits or rejects each one, exactly as for an Ossie model. 
 Helios is libraries; hosts serve them. The ontology keeps that split.
 
 - **Tools (Helios, helios-serve).** Plain functions with metadata, added to the existing seven: `describe_object_type`, `search_objects`, `get_object`, `run_object_set`, `aggregate`, `submit_action` (which returns a proposal or a commit), `explain_object` (its sources, edits and lineage). helios-mcp serves them to a local agent; Daedalus or the host serves them to shared deployments. This is how Mistral agents and the Prime Agent reach the ontology.
-- **HTTP API (host).** Object sets, objects, actions and the definition over HTTP, with the caller taken from the host's sign-in. An OpenAPI description, from which a typed client can be generated.
-- **Applications (host).** An object view (title, visible properties, links, metrics, applicable actions and an action form that shows criteria messages) and an object explorer (search, filter, search-around, saved explorations). In Horus, a map popup opens the object view. A visual definition editor waits until after the core; review in Helios covers the first release.
+- **HTTP API (Helios reference server, host sign-in).** Object sets, objects, actions and the definition over HTTP, served by `helios-ontology-server` with the caller taken from the host's sign-in. An OpenAPI description, from which the TypeScript client `@helios/ontology-client` is generated.
+- **Ontology components (Helios).** `@helios/ontology-ui`, React components rendered from the definition: an object view (title, visible properties, links, metrics, applicable actions), an object-set table and explorer (search, filter, search-around, saved explorations), an action form (parameters, criteria messages, proposal or commit), a review queue for proposals, an object history (edits, sources, lineage) and a read-only definition browser. The rule: a screen built only from the definition and what the caller may see and do belongs in Helios; a screen that needs domain knowledge or a layout the host chooses belongs in the host. The components are still a library (no server, state or identity: they take a client and a caller), unstyled with theme tokens, and hosts register renderers for property types and link views. React 18 and 19 are peer dependencies, and the components work as Next.js client components (Horus is Next 16, React 19).
+- **Reference console (Helios).** A thin shell, bundled with the reference server, that composes the components into an admin and steward UI, so a new host has a usable UI on day one. It follows the Horus host, so the components are proven in a real host first.
+- **Applications (host).** Layout, navigation, workflows and domain views. In Horus: the map, with a renderer for `Located` and map popups that open the object view; alert triage. Helios does not build a page or app builder. A visual definition editor waits until after the core; review covers the first release.
 
 ## Helios or Horus
 
@@ -496,7 +498,9 @@ A starting split, to iterate on. The rule of thumb is Helios's own: libraries in
 | Kafka stream adapter | Helios: helios-cloudera or a stream plugin | Any host with streams needs it; decided 2026-11-19 |
 | Topic names, mappings, Flink jobs and their wiring to actions | Horus | The host's own pipeline |
 | Function runner process | Horus | Host owns processes and sandboxing |
-| Object view, explorer, map integration | Horus | Applications |
+| Ontology components: object view, explorer, action form, review queue, history, definition browser | Helios: `@helios/ontology-ui` (npm), on `@helios/ontology-client` | Built only from the definition, so every host needs the same screens; decided 2026-11-19 |
+| Reference console | Helios: bundled with `helios-ontology-server` | A usable UI for a new host on day one |
+| Layout, navigation, workflows, map and other domain views | Horus | Applications |
 | Maritime and aviation packs, the Horus extension | Horus at first; packs may move to Helios | Domain |
 
 **Boundaries to decide together:**
@@ -504,7 +508,7 @@ A starting split, to iterate on. The rule of thumb is Helios's own: libraries in
 1. **Is there a reusable server?** *Decided 2026-11-19: yes.* A `helios-ontology-server` reference host, outside the libraries like Daedalus, so a second host (a car manufacturer, say) does not rewrite the API. Hosts plug in sign-in and caller attributes.
 2. **Stream adapter.** *Decided 2026-11-19: Helios.* The Kafka adapter lives in helios-cloudera or a new plugin; Horus supplies topic names and mappings.
 3. **Postgres as a requirement.** Helios's storage is pluggable. Is the entity index allowed to require Postgres, with SQLite for laptops, or does it need an index plugin interface from day one?
-4. **Applications.** Is an object view generic enough to ship as a Helios example (like the existing viewer), with Horus embedding it, or is it Horus code?
+4. **Applications.** *Decided 2026-11-19: generic screens in Helios.* Screens built only from the definition ship as `@helios/ontology-ui` components that Horus embeds; layout and domain views stay with the host (see [Serving](#serving-tools-api-and-applications)).
 5. **Domain packs.** Maritime and aviation could be Helios packs for other customers, or stay Horus's.
 6. **Helios's release.** The ontology arrives after Helios's general-use release (its phase 9). Does it wait for helios-crawl (phase 10), or does entity resolution start with structured identity only?
 
@@ -607,30 +611,35 @@ flowchart LR
   s8 --> s10[S10 Tools and reference server]
   s7 --> s10
   s6 --> s11[S11 Proposals for instances and entity resolution]
-  s10 --> s12[S12 Horus host]
+  s10 --> s14[S14 Ontology components]
+  s11 --> s14
+  s14 --> s12[S12 Horus host]
   s9 --> s12
   s12 --> s13[S13 Seeds]
+  s12 --> s15[S15 Reference console]
   s11 --> s13
   s3 --> s13
 ```
 
 | Sprint | Owner | Points | Remaining |
 |---|---|---:|---:|
-| Start | | 0 | 245 |
-| S0 Foundations | Helios | 13 | 232 |
-| S1 Object types over Ossie | Helios | 26 | 206 |
-| S2 Links and interfaces | Helios | 23 | 183 |
-| S3 Proposals and review for the definition | Helios | 13 | 170 |
-| S4 Entity storage | Helios | 21 | 149 |
-| S5 Object sets | Helios | 25 | 124 |
-| S6 Actions | Helios | 24 | 100 |
-| S7 Functions | Helios, runner in Horus | 13 | 87 |
-| S8 Governance | Helios | 16 | 71 |
-| S9 Side effects, commit stream and Kafka adapter | Helios | 11 | 60 |
-| S10 Tools and reference server | Helios | 16 | 44 |
-| S11 Instance proposals and entity resolution | Helios | 15 | 29 |
-| S12 Horus host | Horus | 11 | 18 |
-| S13 Seeds | Both | 18 | 0 |
+| Start |  | 0 | 270 |
+| S0 Foundations | Helios | 13 | 257 |
+| S1 Object types over Ossie | Helios | 26 | 231 |
+| S2 Links and interfaces | Helios | 23 | 208 |
+| S3 Proposals and review for the definition | Helios | 13 | 195 |
+| S4 Entity storage | Helios | 21 | 174 |
+| S5 Object sets | Helios | 25 | 149 |
+| S6 Actions | Helios | 24 | 125 |
+| S7 Functions | Helios, runner in Horus | 13 | 112 |
+| S8 Governance | Helios | 16 | 96 |
+| S9 Side effects, commit stream and Kafka adapter | Helios | 11 | 85 |
+| S10 Tools and reference server | Helios | 16 | 69 |
+| S11 Instance proposals and entity resolution | Helios | 15 | 54 |
+| S14 Ontology components | Helios | 21 | 33 |
+| S12 Horus host | Horus | 10 | 23 |
+| S13 Seeds | Both | 18 | 5 |
+| S15 Reference console | Helios | 5 | 0 |
 
 | Layer | Sprints | Points |
 |---|---|---:|
@@ -638,9 +647,10 @@ flowchart LR
 | Storage and query | S4–S5 | 46 |
 | Write path | S6, S7, S9 | 48 |
 | Governance | S8 | 16 |
-| Serving, resolution, host, seeds | S10–S13 | 60 |
+| Serving, resolution, host, seeds | S10–S13 | 59 |
+| Ontology components and console | S14, S15 | 26 |
 
-The domain-neutral changes of 2026-11-19 added 25 points: identity keys and series types (S1), `Located` and containment (S2), `traverse` and `within` (S5), state machines (S6), the Kafka adapter moving into Helios (S9, and 2 fewer in S12), the reference server's sign-in interface (S10), resolution driven by identity keys (S11) and the manufacturing test pack (S13).
+The domain-neutral changes of 2026-11-19 added 25 points: identity keys and series types (S1), `Located` and containment (S2), `traverse` and `within` (S5), state machines (S6), the Kafka adapter moving into Helios (S9, and 2 fewer in S12), the reference server's sign-in interface (S10), resolution driven by identity keys (S11) and the manufacturing test pack (S13). The UI split, also 2026-11-19, added 25 more: the ontology components (S14) and the reference console (S15), with 1 fewer in S12 because Horus embeds the components instead of building its own.
 
 ### S0 Foundations (13)
 
@@ -764,7 +774,7 @@ The definition exists and is versioned. Nothing can be queried yet.
 | 6 | Ontology tools in helios-serve; served by helios-mcp |
 | 5 | `helios-ontology-server`: HTTP API over object sets, objects, actions and the definition; OpenAPI |
 | 3 | Sign-in and caller-attribute interface that each host implements |
-| 2 | Typed client generated from OpenAPI for a chosen subset |
+| 2 | TypeScript client (`@helios/ontology-client`) generated from the OpenAPI; S14 builds on it |
 
 ### S11 Instance proposals and entity resolution (15)
 
@@ -775,7 +785,7 @@ The definition exists and is versioned. Nothing can be queried yet.
 | 3 | Merge of two entities as a function-backed action |
 | 4 | Structured identity from declared identity keys: strong match links, new strong key creates a provisional entity, weak evidence proposes, conflicting strong keys are flagged |
 
-### S12 Horus host (11)
+### S12 Horus host (10)
 
 | Points | Work |
 |---:|---|
@@ -783,7 +793,7 @@ The definition exists and is versioned. Nothing can be queried yet.
 | 1 | Helios Kafka adapter wired to Horus topics and mappings |
 | 2 | Flink alerts and encounters submitted as machine-actor actions |
 | 2 | Function runner process |
-| 3 | Object view and explorer; map popups open the object view |
+| 2 | Helios components (S14) embedded in the Horus UI with Horus theme tokens; a map renderer for `Located`; map popups open the object view |
 
 ### S13 Seeds (18)
 
@@ -792,7 +802,31 @@ The definition exists and is versioned. Nothing can be queried yet.
 | 5 | OSINT pack: interfaces, types, links, value types, actions; crawler records mapped |
 | 6 | Horus extension over the lake and `ref_*` tables, with its metrics and actions |
 | 2 | Ask Horus tier 1 reads an object set (Horus burndown 11.4) |
-| 5 | Manufacturing test pack with its synthetic dataset; the four acceptance questions pass with no core change |
+| 5 | Manufacturing test pack with its synthetic dataset; the four acceptance questions pass, and its objects render in the S14 components, with no core or component change |
+
+### S14 Ontology components (21)
+
+Generic screens, rendered from the definition. Runs after S10 and S11 and before the Horus host, which embeds them.
+
+| Points | Work |
+|---:|---|
+| 3 | `@helios/ontology-ui` package: React 18 and 19 peers, Next.js client components, theme tokens, a renderer registry for property types and link views |
+| 4 | Object view: title, visible properties, links, metrics, applicable actions; hidden objects and nulled properties shown as policy says |
+| 4 | Object-set table and explorer: search, filter, sort, search-around, saved explorations |
+| 4 | Action form: parameters from the action, criteria messages, proposal or commit, state-machine transitions |
+| 3 | Review queue for definition and instance proposals: accept, edit, reject |
+| 2 | Object history and explain (edits, sources, lineage); read-only definition browser |
+| 1 | Tests against the S0–S11 fixtures, with two unrelated object types and no domain code |
+
+### S15 Reference console (5)
+
+A usable UI for a new host, after the components are proven in Horus.
+
+| Points | Work |
+|---:|---|
+| 3 | Console shell: navigation over object types, explorer, review queue, definition browser; the caller from the server's sign-in plug-in |
+| 1 | Served as static files by `helios-ontology-server` |
+| 1 | Test on the manufacturing test pack with the DuckDB sample |
 
 ## After the core
 
