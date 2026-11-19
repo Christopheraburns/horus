@@ -128,31 +128,6 @@ export default function SharePanel({ mapView, activeLayers, mouseCoords }: Share
               </div>
             </div>
 
-            {/* Quick Share */}
-            <div className="flex gap-2">
-              <a
-                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent('🏛️ HORUS — Global Intelligence Dashboard')}&url=${encodeURIComponent(generateShareUrl())}`}
-                target="_blank"
-                className="flex-1 text-center py-1.5 rounded text-[7px] font-mono tracking-wider text-[var(--text-muted)] border border-[var(--border-primary)] hover:border-[#1DA1F2] hover:text-[#1DA1F2] transition-colors"
-              >
-                𝕏 POST
-              </a>
-              <a
-                href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(generateShareUrl())}`}
-                target="_blank"
-                className="flex-1 text-center py-1.5 rounded text-[7px] font-mono tracking-wider text-[var(--text-muted)] border border-[var(--border-primary)] hover:border-[#0A66C2] hover:text-[#0A66C2] transition-colors"
-              >
-                IN SHARE
-              </a>
-              <a
-                href={`https://reddit.com/submit?url=${encodeURIComponent(generateShareUrl())}&title=${encodeURIComponent('HORUS — Open Source Global Intelligence Platform')}`}
-                target="_blank"
-                className="flex-1 text-center py-1.5 rounded text-[7px] font-mono tracking-wider text-[var(--text-muted)] border border-[var(--border-primary)] hover:border-[#FF4500] hover:text-[#FF4500] transition-colors"
-              >
-                REDDIT
-              </a>
-            </div>
-
             <div className="mt-3 text-center text-[6px] font-mono text-[var(--text-muted)] tracking-widest">
               PRESS [S] TO TOGGLE · SHAREABLE LINKS PRESERVE VIEW STATE
             </div>

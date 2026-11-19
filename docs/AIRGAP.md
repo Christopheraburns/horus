@@ -63,7 +63,7 @@ Next.js telemetry is already disabled (`NEXT_TELEMETRY_DISABLED=1` in [launch_ui
 | B6 | Fallback basemap | `tiles.openfreemap.org/styles/dark` | Only if the Horus tile server fails | [tileProxy.ts](../ui/src/lib/tileProxy.ts), [HorusMap.tsx:162](../ui/src/components/HorusMap.tsx#L162) — **Fixed (7.4):** there is no fallback in PIPELINE mode; the map stays on the Horus tile server. |
 | B7 | Camera images and video | each camera operator's host (about 60 sources) | PUBLIC: CCTV layer | [CameraViewer.tsx](../ui/src/components/CameraViewer.tsx) |
 | B8 | Embedded video | `youtube.com`, `youtube-nocookie.com`, `rumble.com` | PUBLIC: live news and alerts | [LiveAlerts.tsx](../ui/src/components/LiveAlerts.tsx) |
-| B9 | Links in popups and the Share panel | FlightAware, MarineTraffic, Google Maps, X, Reddit, LinkedIn and others | Only when clicked; these are navigations, not background calls | [HorusMap.tsx](../ui/src/components/HorusMap.tsx), [SharePanel.tsx](../ui/src/components/SharePanel.tsx) |
+| B9 | Links in popups and the Share panel | FlightAware, MarineTraffic, Google Maps, X, Reddit, LinkedIn and others | Only when clicked; these are navigations, not background calls | **Fixed (2026-11-18):** all external links removed from the map popups and the Share panel. Camera and news-feed source links remain (PUBLIC-mode features). |
 
 ## 5. UI server: always, or on use
 

@@ -128,6 +128,22 @@ so flights also come from OpenSky. Both flows publish to the same topic.
 | 11.2 | Short-lived gateway cache for Pattern of Life, keyed by entity, window and time bucket (about 10 min); the panel shows "generated N min ago" with a refresh button | A repeat request within the window returns instantly | 2 | Todo |
 | 11.3 | Record every generated answer (question, entity, facts used, model, timestamp) in an Iceberg table: an audit trail and lineage for AI output | Answers queryable in Trino | 3 | Todo |
 
+## 12. Offline reference data
+
+Catalog and refresh pattern: [docs/OFFLINE-DATA.md](docs/OFFLINE-DATA.md). Each refreshable dataset gets a NiFi flow (nightly by default) whose source URL is a parameter: the public source when connected, an internal mirror when air-gapped. It lands in an Iceberg `ref_*` table.
+
+| ID | Item | Done when | Est | Status |
+|---|---|---|---|---|
+| 12.1 | Catalog of offline datasets, kept as a running list | `docs/OFFLINE-DATA.md` | 1 | Done |
+| 12.2 | Refresh pattern: a template NiFi flow (CRON, InvokeHTTP from `#{refdata.<dataset>.url}`, skip if unchanged, normalise, write Iceberg, log row to `ref_refresh_log`); the provisioner creates the `ref_*` tables and parameters, and `status` shows each dataset's age | First dataset refreshes nightly and shows in `status` | 5 | Todo |
+| 12.3 | Flight reference flows: FAA registry, OpenSky aircraft DB or tar1090-db, airline designators, routes, OurAirports (feeds 9.4) | Tables populated nightly | 4 | Todo |
+| 12.4 | Maritime reference flows: World Port Index, anchorages, MMSI country codes (feeds 4.1a) | Tables populated; detections can join them | 3 | Todo |
+| 12.5 | Sanctions flows: OFAC SDN first, then UN, EU and UK; the intel resolver reads `ref_sanctions` instead of downloading at start-up (closes AIRGAP I1) | Resolver works with no internet; Time Travel shows past list versions | 4 | Todo |
+| 12.6 | Places: GeoNames and Natural Earth, for an offline reverse geocode that restores the LOC readout in PIPELINE mode (AIRGAP B2) | LOC readout works with the internet off | 3 | Todo |
+| 12.7 | Satellite orbits: CelesTrak GP every 6 h, satellite layer enabled in PIPELINE mode | Satellites render in PIPELINE mode | 3 | Todo |
+| 12.8 | Knowledge graph rebuild from a fresh Wikidata dump, scripted (it is now a one-off snapshot) | Rebuild runs end to end | 4 | Todo |
+| 12.9 | Licence review for every "confirm" row in the catalog, before customer use | Each row has a confirmed licence | 1 | Todo |
+
 ## Carried over
 
 | ID | Item | Status |
