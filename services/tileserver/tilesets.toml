@@ -1,0 +1,73 @@
+# Horus tile-set registry: what the tile files' own metadata can't say.
+#
+# Format: docs/TILESETS.md. The registry is every tile file found in the tile
+# store (the instance's bucket prefix, or this folder in development), merged
+# with the [tileset.<id>] tables below, plus the [url.<id>] entries for tile
+# servers Horus doesn't host. A file tile set's id is its file name without the
+# extension. A file with no table here, or an entry that fails validation, is
+# skipped with a log line; it never stops the tile server.
+
+# ── Delivered imagery: ESA WorldCover 2021, Sentinel-2 RGB annual composite ──
+# One licence, attribution and capture period for all seven; each file's
+# metadata already carries the attribution text, zooms and bounds.
+
+[defaults.imagery]
+role = "imagery"
+licence = { id = "CC-BY-4.0", url = "https://creativecommons.org/licenses/by/4.0/" }
+captured = "2021-01-01/2021-12-31"          # annual median composite of 2021
+marking = { classification = "UNCLASSIFIED" }
+
+[tileset.horus-imagery-global]
+defaults = "imagery"
+title = "World imagery (ESA WorldCover 2021, z0-10)"
+
+[tileset.horus-imagery-hormuz]
+defaults = "imagery"
+title = "Strait of Hormuz imagery (ESA WorldCover 2021)"
+
+[tileset.horus-imagery-taiwan-strait]
+defaults = "imagery"
+title = "Taiwan Strait imagery (ESA WorldCover 2021)"
+
+[tileset.horus-imagery-bosporus]
+defaults = "imagery"
+title = "Bosporus imagery (ESA WorldCover 2021)"
+
+[tileset.horus-imagery-crimea]
+defaults = "imagery"
+title = "Crimea imagery (ESA WorldCover 2021)"
+
+[tileset.horus-imagery-channel]
+defaults = "imagery"
+title = "English Channel imagery (ESA WorldCover 2021)"
+
+[tileset.horus-imagery-hampton-roads]
+defaults = "imagery"
+title = "Hampton Roads imagery (ESA WorldCover 2021)"
+
+# ── Vector basemap: OpenMapTiles planet, z0-7 ──
+[tileset.horus-basemap]
+role = "basemap"
+title = "World basemap (OpenMapTiles)"
+licence = { id = "ODbL-1.0", url = "https://opendatacommons.org/licenses/odbl/" }
+attribution = "© OpenMapTiles © OpenStreetMap contributors"
+marking = { classification = "UNCLASSIFIED" }
+
+# ── A customer's own tile server (example, not enabled) ──
+# Servers that need credentials go through the Horus tile service, which adds
+# them; the browser never sees them (credentials = "<env var name>").
+#
+# [url.customer-ortho-2026]
+# role = "imagery"
+# title = "Port of Example orthophoto, March 2026"
+# scheme = "xyz"                               # xyz, tms or wmts
+# template = "https://geoserver.example.mil/gwc/service/tms/1.0.0/ortho@EPSG:900913@png/{z}/{x}/{y}.png"
+# format = "png"
+# bounds = [-76.4, 36.8, -76.2, 37.0]
+# minzoom = 10
+# maxzoom = 19
+# attribution = "Example Imagery Agency"
+# licence = { id = "proprietary", url = "https://example.mil/terms" }
+# captured = "2026-03-14"
+# marking = { classification = "UNCLASSIFIED", releasability = "FVEY" }
+# credentials = "CUSTOMER_ORTHO_BASIC_AUTH"
