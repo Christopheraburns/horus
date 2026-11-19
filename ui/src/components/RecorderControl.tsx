@@ -77,8 +77,8 @@ export default function RecorderControl() {
         !status.available
           ? 'Lakehouse recorder unavailable'
           : recording
-            ? 'Stop recording to Iceberg + Neo4j'
-            : 'Start recording to Iceberg + Neo4j'
+            ? 'Stop recording to Iceberg'
+            : 'Start recording to Iceberg'
       }
       className="pointer-events-auto glass-panel px-3 py-1.5 flex items-center gap-1.5 text-[8px] font-mono tracking-widest hover:opacity-80 transition-opacity border-white/10 bg-black/20 disabled:opacity-50 disabled:cursor-not-allowed"
     >

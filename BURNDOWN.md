@@ -201,4 +201,4 @@ Plan: [docs/ONTOLOGY_PLAN.md](docs/ONTOLOGY_PLAN.md). One stack: object types bo
 | C4 | Fold RUNBOOK.md into INSTALL.md | Todo |
 | C7 | Captured-graph gap: the gateway's `graph.py` expects a Neo4j that Horus doesn't run (blocks Ask Horus tier 1, 11.4). Still needed soon; long term the graph is generated from the ontology (O3) | Todo |
 | C8 | Optional: delete the unused `horus_hive` SSB catalog and old `osiris-*` Docker Hub images | Todo |
-| C9 | UI status bar: `V.4.1` label and the `NEO4J` button that points at localhost | Todo |
+| C9 | UI status bar: `V.4.1` label and the `NEO4J` button that points at localhost | Done: both removed. The graph explorer is O13 |

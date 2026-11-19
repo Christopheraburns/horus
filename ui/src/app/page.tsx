@@ -634,7 +634,6 @@ export default function Dashboard() {
         </span>
 
         <UptimeClock />
-        <span className="text-[10px] font-bold tracking-[0.2em] text-[var(--text-muted)] opacity-50 ml-2">V.4.1</span>
 
         <RecorderControl />
 
@@ -656,9 +655,6 @@ export default function Dashboard() {
           <span className="font-bold text-[var(--text-secondary)]">LLM</span>
         </Link>
 
-        <a href="http://localhost:7474" target="_blank" rel="noopener noreferrer" title="Open Neo4j Browser (knowledge graph). Connect bolt://localhost:7687, user neo4j" className="pointer-events-auto glass-panel px-3 py-1.5 flex items-center gap-1.5 text-[8px] font-mono tracking-widest hover:opacity-80 transition-opacity border-white/10 bg-black/20">
-          <span className="font-bold text-[var(--text-secondary)]">NEO4J</span>
-        </a>
 
       </motion.div>
 
@@ -673,9 +669,6 @@ export default function Dashboard() {
           <Link href="/llm" className="glass-panel px-2 py-1 flex items-center gap-1.5 text-[7px] font-mono tracking-widest hover:opacity-80 transition-opacity border-white/10 bg-black/20">
             <span className="font-bold text-[var(--text-secondary)]">LLM</span>
           </Link>
-          <a href="http://localhost:7474" target="_blank" rel="noopener noreferrer" className="glass-panel px-2 py-1 flex items-center gap-1.5 text-[7px] font-mono tracking-widest hover:opacity-80 transition-opacity border-white/10 bg-black/20">
-            <span className="font-bold text-[var(--text-secondary)]">NEO4J</span>
-          </a>
         </motion.div>
       )}
 
