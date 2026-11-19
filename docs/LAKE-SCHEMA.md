@@ -4,6 +4,10 @@ The events table is Horus's one generic observations table: every report from
 every feed, one row each. This note defines version 2 of the table and of the
 canonical envelope it is built from (burndown section 16).
 
+Maintenance (`provision/lake_maintenance.py`, run daily by the Workbench Job
+`horus-<instance>-lake-maintenance`) compacts each finished day into sorted files
+and expires snapshots and orphan files after 7 days.
+
 Rules:
 
 - **One generic table.** No resolved entity ids and no entity attributes: the
@@ -188,6 +192,7 @@ Run locally with Docker, no platform needed:
 | `nifi/test/run.sh` | Every NiFi script, on sample input for its feed, meets envelope v2 and gives the expected values |
 | `ssb/test/run_lake_local.sh` | The lake job's views and dedupe (Flink 1.19) turn those envelopes, a duplicate and a v1 message into rows that match a Python reference column by column |
 | `ssb/test/run_migration_local.sh` | The migration on Trino 460: a v1 table filled from the v1 scripts (git `7f1c2dd`) and the v2 scripts, as the v1 job wrote it; every row kept; v2-payload rows equal the Flink job's; v1-payload rows equal their v2 twins within the precision v1 kept; re-run, partial-day redo and swap; the gateway's Time Travel query before and after |
+| `ssb/test/run_maintenance_local.sh` | Maintenance (16.6) on Trino 460: three finished days written as 15 small files each are compacted to one, today is left alone, rows are kept, a second pass does nothing; then reading the compacted file directly, it is one run sorted by `tile_z8` and a Strait of Hormuz bounding box overlaps 2 of its 38 row groups (16.7) |
 | `ssb/test/run_trino_local.sh` | `provision/lake.py` on Trino 460: the v2 DDL is accepted, a v1 table is detected and left alone, and Trino's `tile_z8` and `obs_hash` (`lake.TILE_Z8_SQL`, `lake.OBS_HASH_SQL`, used by the backfill) agree with Flink's on every row |
 
 ## Open checks
@@ -199,6 +204,8 @@ Run locally with Docker, no platform needed:
   configured with another codec.
 - **The SSB Flink Iceberg sink on a partitioned format-v2 table:** first seen
   on the platform when the migration (16.5) starts the v2 job.
-- **Compaction applying `sorted_by`** (16.6): whether CDW Trino's
-  `ALTER TABLE ... EXECUTE optimize` applies the sort order. If it doesn't, the
-  maintenance job uses Spark's `rewrite_data_files` with the sort strategy.
+- **Compaction applying `sorted_by`, settled locally 2026-11-19:** Trino 460's
+  `optimize`, restricted to one day, writes the day as one run sorted by
+  `tile_z8` then `event_time` (`ssb/test/run_maintenance_local.sh`). Still to
+  see on CDW Trino: the first `maintain-lake` run should report each finished
+  day going from about a thousand files to a few.

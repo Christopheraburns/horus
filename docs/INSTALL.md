@@ -129,6 +129,15 @@ it to v2 with its history:
    safe to re-run if one fails.
 3. Check Time Travel and Pattern of Life. Drop `events_iceberg_v1` after a week.
 
+**Maintenance.** The Flink job writes many small files (about 1,300 a day). The
+Workbench Job `horus-<instance>-lake-maintenance` (created by `create --yes`, or
+by the first `maintain-lake --yes`) runs daily at 03:30 UTC: it compacts each
+finished day into a few files sorted by map tile, so area queries skip most of
+the data, then expires snapshots and orphan files older than 7 days.
+`python provision/horus.py maintain-lake` shows what it would do. If the Job
+can't be created through the Workbench API, the command prints the settings to
+create it by hand.
+
 ## 6. NiFi flows
 
 `create --yes` does four things here:

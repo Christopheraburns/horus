@@ -97,6 +97,10 @@ class Config:
         return f"horus-{self.instance}-feeds-gateway"
 
     @property
+    def maintenance_job(self) -> str:
+        return f"horus-{self.instance}-lake-maintenance"
+
+    @property
     def lakehouse_group(self) -> str:
         # "-2": the lake was rebuilt (2026-11-17) by replaying the topic through the
         # deduplicating job under a fresh consumer group. Bump again to re-replay.

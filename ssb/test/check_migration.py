@@ -43,12 +43,14 @@ def run(sql):
     return cur.fetchall()
 
 
-for _ in range(30):
+for _ in range(60):   # wait for a worker, not just the coordinator ("No nodes available")
     try:
-        run("SELECT 1")
-        break
+        if run("SELECT count(*) FROM system.runtime.nodes WHERE state = 'active'")[0][0] >= 1:
+            run("SHOW SCHEMAS FROM iceberg")
+            break
     except Exception:  # noqa: BLE001
-        time.sleep(2)
+        pass
+    time.sleep(2)
 
 failures = []
 

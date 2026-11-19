@@ -400,6 +400,9 @@ def deploy_data_plane(cfg: cfgmod.Config, rep: Report, start_flows: bool) -> int
                 failures += 1
         else:
             print("ssb: Flink hub not AVAILABLE or Kafka topic not ready; job skipped")
+
+        if lake_version == 2:
+            ensure_maintenance_job(cfg)
     finally:
         os.unlink(ca)
     return 1 if failures else 0
@@ -510,6 +513,76 @@ def update_scripts(cfg: cfgmod.Config, rep: Report, apply: bool) -> int:
     return 0
 
 
+MAINTENANCE_SCHEDULE = "30 3 * * *"   # 03:30 UTC, after the day's last adsb.lol poll
+
+
+def _maintenance_by_hand(cfg: cfgmod.Config, why: str) -> None:
+    print(f"workbench: {why}. Create the Job by hand: Jobs > New Job, name {cfg.maintenance_job}, "
+          f"script provision/horus.py, arguments `maintain-lake --yes`, the Horus runtime, "
+          f"schedule cron `{MAINTENANCE_SCHEDULE}` (UTC), 1 vCPU / 2 GiB")
+
+
+def ensure_maintenance_job(cfg: cfgmod.Config) -> None:
+    """The daily lake-maintenance Workbench Job (burndown 16.6), created once per instance.
+
+    Uses the Workbench API (cmlapi) from inside the project, and the runtime of one
+    of the project's Applications so the Job has the same Python packages.
+    """
+    project = os.environ.get("CDSW_PROJECT_ID")
+    if not project:
+        _maintenance_by_hand(cfg, "not running inside a Workbench project")
+        return
+    try:
+        import cmlapi
+    except ImportError:
+        _maintenance_by_hand(cfg, "the Workbench API client (cmlapi) is not installed")
+        return
+    try:
+        client = cmlapi.default_client()
+        found = client.list_jobs(project, search_filter=json.dumps({"name": cfg.maintenance_job})).jobs
+        if any(j.name == cfg.maintenance_job for j in found):
+            print(f"workbench: job {cfg.maintenance_job} already present")
+            return
+        apps = client.list_applications(project).applications
+        runtime = next((a.runtime_identifier for a in apps if getattr(a, "runtime_identifier", None)), None)
+        body = cmlapi.CreateJobRequest(
+            name=cfg.maintenance_job, script="provision/horus.py", arguments="maintain-lake --yes",
+            schedule=MAINTENANCE_SCHEDULE, kernel="python3", cpu=1, memory=2, timeout=3600,
+            runtime_identifier=runtime)
+        client.create_job(body, project)
+        print(f"workbench: created job {cfg.maintenance_job} (daily, cron {MAINTENANCE_SCHEDULE} UTC)")
+    except Exception as e:  # noqa: BLE001
+        _maintenance_by_hand(cfg, f"could not create the job ({str(e).splitlines()[0][:160]})")
+
+
+def maintain_lake(cfg: cfgmod.Config, rep: Report, apply: bool) -> int:
+    """Compact finished days, expire snapshots, remove orphan files (burndown 16.6)."""
+    import lake
+    import lake_maintenance
+    if not (cfg.workload_user and cfg.workload_password):
+        print("maintain-lake: HORUS_WORKLOAD_USER / HORUS_WORKLOAD_PASSWORD not set")
+        return 1
+    if rep.gateway_env.get("LAKE_ENGINE") != "trino":
+        print("maintain-lake: implemented for Trino warehouses only")
+        return 1
+    host, port = rep.gateway_env["HIVE_HOST"], int(rep.gateway_env["HIVE_PORT"])
+    cur = lake._cursor(host, port, cfg.workload_user, cfg.workload_password, cfg.lake_catalog)
+    if lake.schema_version(cur, cfg.lake_catalog, cfg.database, cfg.table) != 2:
+        print("maintain-lake: the events table is not schema v2 (run migrate-lake first)")
+        return 1
+
+    def run(sql: str) -> list:
+        cur.execute(sql)
+        return cur.fetchall()
+
+    lake_maintenance.maintain(run, f"{cfg.lake_catalog}.{cfg.database}.{cfg.table}", apply)
+    if not apply:
+        print("\nDry run. Re-run with --yes to apply (that also creates the daily Job if it's missing).")
+        return 0
+    ensure_maintenance_job(cfg)   # the first run by hand schedules the daily one
+    return 0
+
+
 def migrate_lake(cfg: cfgmod.Config, rep: Report, apply: bool) -> int:
     """Move this instance's events table to lake schema v2 with its history (burndown 16.5)."""
     import lake
@@ -597,11 +670,12 @@ def _print(rep: Report) -> None:
 
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(prog="horus provision")
-    ap.add_argument("command", choices=["status", "create", "update-scripts", "migrate-lake"])
+    ap.add_argument("command", choices=["status", "create", "update-scripts", "migrate-lake", "maintain-lake"])
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     ap.add_argument("--env-file", default=".env")
     ap.add_argument("--yes", action="store_true",
-                    help="create: actually create (billable) resources; update-scripts, migrate-lake: apply")
+                    help="create: actually create (billable) resources; update-scripts, migrate-lake, "
+                         "maintain-lake: apply")
     ap.add_argument("--wait", action="store_true", help="create: wait until the Data Hubs are AVAILABLE")
     ap.add_argument("--no-start", action="store_true", help="create: import NiFi flows but leave them stopped")
     args = ap.parse_args(argv)
@@ -612,6 +686,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return update_scripts(cfg, rep, apply=args.yes)
     if args.command == "migrate-lake":
         return migrate_lake(cfg, rep, apply=args.yes)
+    if args.command == "maintain-lake":
+        return maintain_lake(cfg, rep, apply=args.yes)
     if args.command == "create":
         _print(rep)
         if rep.blocked:
@@ -626,6 +702,7 @@ def main(argv: Optional[List[str]] = None) -> int:
               f"{len(nifimod.load_flows(cfg.instance, cfg.parameter_context, cfg.optional_flows))} flows"
               + ("" if args.no_start else " (started once Kafka is up)"))
         print(f"  ensure SSB project {cfg.ssb_project}, Flink jobs {cfg.flink_job} and {cfg.detections_job}")
+        print(f"  ensure Workbench Job {cfg.maintenance_job} (daily lake maintenance at {MAINTENANCE_SCHEDULE} UTC)")
         if not args.yes:
             print("\nDry run. Re-run with --yes to apply.")
             return 0
