@@ -61,6 +61,9 @@ BURNDOWN-DEPLOY A1 and A2.
 |---|---|---|---|---|
 | 6.1 | Camera sources and catalogue cache, preview tiles, close-up viewer, HLS/YouTube playback (check each source's terms) | Cameras render in PUBLIC mode | 8 | Todo |
 | 6.2 | Camera catalogue as a NiFi feed so cameras work in PIPELINE mode | Cameras render in PIPELINE mode | 4 | Todo |
+| 6.5 | Public camera video through NiFi ([DEPLOYMENT-MODEL.md](docs/DEPLOYMENT-MODEL.md#video)): NiFi fetches HLS segments or snapshots for a watchlist of cameras (ffmpeg on the NiFi host for RTSP), writes them to object storage and indexes them in `camera_frames` / `camera_segments`; an internal media server re-serves stored segments as HLS; the UI never contacts a camera | A watched camera plays in PIPELINE mode with no UI or media-server internet traffic | 8 | Todo |
+| 6.6 | Private-sensor path: media server (MediaMTX) takes an internal camera or a test RTSP/MPEG-TS source directly, LL-HLS to the UI (not WebRTC on Workbench), recordings indexed in `camera_segments` | Internal test stream plays live and its recording is findable by time | 5 | Todo |
+| 6.7 | Playback and clips: from an alert or a track point, open the nearest camera's recording at that time | An alert opens a clip from the right time | 3 | Todo |
 | 6.3 | AI Analyze (YOLOX-nano in the browser, model file self-hosted); Identify routed to Mistral through the gateway | Works with no browser key | 4 | Todo |
 | 6.4 | Flights: airframe identity, flown tracks (from the lake), multi-aircraft watch | Ported | 6 | Todo |
 
@@ -148,6 +151,20 @@ Catalog and refresh pattern: [docs/OFFLINE-DATA.md](docs/OFFLINE-DATA.md). Each 
 | 12.7 | Satellite orbits: CelesTrak GP every 6 h, satellite layer enabled in PIPELINE mode | Satellites render in PIPELINE mode | 3 | Todo |
 | 12.8 | Knowledge graph rebuild from a fresh Wikidata dump, scripted (it is now a one-off snapshot) | Rebuild runs end to end | 4 | Todo |
 | 12.9 | Licence review for every "confirm" row in the catalog, before customer use | Each row has a confirmed licence | 1 | Todo |
+
+## 13. Deployment model and security markings
+
+Design: [docs/DEPLOYMENT-MODEL.md](docs/DEPLOYMENT-MODEL.md). Boundary rule: no high-side service opens a connection to the public internet; public data arrives only through NiFi; private sensors on the enclave network may connect directly.
+
+| ID | Item | Done when | Est | Status |
+|---|---|---|---|---|
+| 13.1 | Deployment model note: low side, CDS, high side, where each component sits, the boundary rule, video paths, markings | `docs/DEPLOYMENT-MODEL.md` | 1 | Done |
+| 13.2 | Two-tier NiFi demo: a low-side process group collects a public feed and writes packaged files to a drop folder; a simulated one-way hand-off moves them; high-side NiFi picks them up and publishes to Kafka. Start with one feed (adsb.lol) | The feed reaches the map only through the hand-off | 5 | Todo |
+| 13.3 | Boundary check: a `status` or test step that lists outbound connections from the high-side services (gateway, resolver, tile server, UI, media server) and flags any to the public internet | Check passes in PIPELINE mode; failures name the service and host | 3 | Todo |
+| 13.4 | Markings in the lake: the lake job lands `classification` and a new `releasability` field as columns (today `classification` is only inside the raw payload); NiFi flows set both from parameters | Columns populated for every source | 2 | Todo |
+| 13.5 | Atlas classifications on the Horus tables and columns, with Ranger tag-based policies; Ranger row-level filter on events by marking versus user attributes; demo with two users who see different rows in Trino | Two users, same query, different rows | 4 | Todo |
+| 13.6 | Markings in the UI: the gateway queries as the signed-in user (needs SSO, BURNDOWN-DEPLOY), and popups show each record's marking | A restricted record is absent for one user and marked for the other | 4 | Todo |
+| 13.7 | MISB/KLV video: parse KLV from a sample MPEG-TS file (sensor position, frame footprint, time) into `camera_segments`, and draw the footprint on the map | A sample FMV clip shows its ground footprint moving on the map | 6 | Todo |
 
 ## Carried over
 
