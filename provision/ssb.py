@@ -99,8 +99,13 @@ class SSB:
         return st
 
     def unlock_keytab(self, principal: str, password: str) -> None:
-        """SSB runs jobs as the user, from a keytab it derives from the workload password."""
-        self._req("POST", "/user/keytab/generate", json={"principal": principal, "password": password})
+        """SSB runs jobs as the user, from a keytab it derives from the workload password.
+        A keytab made on an earlier run is kept (SSB answers HTTP 400 "Keytab already exists")."""
+        try:
+            self._req("POST", "/user/keytab/generate", json={"principal": principal, "password": password})
+        except SsbError as e:
+            if "already exists" not in str(e).lower():
+                raise
 
 
 def render(values: Dict[str, str], template: str = SQL_TEMPLATE) -> str:
