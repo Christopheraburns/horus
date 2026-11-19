@@ -14,9 +14,9 @@ account.
 | Kafka Data Hub | new, Streams Messaging Light Duty | `horus-dev-kafka` |
 | Flink Data Hub | new, Streaming Analytics Light Duty | `horus-dev-flink` |
 | NiFi flows (7 flows, 5 feeds) | existing Flow Management (NiFi 2) Data Hub | groups `HORUS-dev - …`, parameter context `Horus-dev` |
-| Kafka topic | Kafka Data Hub | `horus-dev-events` |
+| Kafka topics | Kafka Data Hub | `horus-dev-events`, `horus-dev-alerts` |
 | Iceberg table | existing CDW Trino virtual warehouse | `iceberg.horus_dev.events_iceberg` |
-| SSB project and Flink job | Flink Data Hub | project `horus_dev`, job `horus_dev_kafka_to_iceberg` |
+| SSB project and Flink jobs | Flink Data Hub | project `horus_dev`, jobs `horus_dev_kafka_to_iceberg` and `horus_dev_detections` |
 
 Every name comes from `HORUS_INSTANCE`, so teams sharing an environment don't
 collide.
@@ -99,7 +99,8 @@ anything that already exists is skipped.
 
 ## 4. Kafka topic
 
-`create --yes` creates `horus-<instance>-events` with 3 partitions.
+`create --yes` creates `horus-<instance>-events` (every feed) and
+`horus-<instance>-alerts` (detections), each with 3 partitions.
 
 If you are not allowed to create topics, the provisioner prints the Ranger
 Kafka policy you need.
@@ -166,6 +167,33 @@ The job removes duplicates as it writes. It keeps the first row for each
 rest. This removes the repeats that polled feeds produce: earthquakes, fires
 and weather alerts are re-sent on every poll. A moving asset's new positions
 have new keys and are kept.
+
+### Detections job
+
+`create --yes` also submits [ssb/04_detections.sql](../ssb/04_detections.sql)
+as `horus_<instance>_detections`. It reads the events topic from the latest
+offset (live traffic only) and writes one JSON alert per detection to
+`horus-<instance>-alerts`:
+
+| Alert | Fires when | Severity |
+|---|---|---|
+| `AIS_GAP` | A vessel underway (3 kn or more) is silent for 2 hours or more and reappears near where it vanished, so it stopped while dark inside AIS coverage. Vessels that leave coverage reappear far away and are not flagged. | MEDIUM |
+| `LOITERING` | A vessel reporting "under way" stays within about 1.5 nm for 90 minutes or more, at 0.3–2 kn. Anchored, moored and fishing vessels are excluded. | LOW |
+| `STS_ENCOUNTER` | Two vessels, both under 2 kn and not moored, are within 0.15 nm (about 280 m) of each other over the same hour. | MEDIUM |
+| `SPEED_JUMP` | Consecutive positions imply more than 60 kn for a vessel or 1000 kn for an aircraft, over a real distance: a spoofed position or a shared MMSI or ICAO address. | MEDIUM |
+| `SQUAWK_EMERGENCY` | An aircraft squawks 7500 (unlawful interference) or 7700 (emergency), both HIGH, or 7600 (radio failure), MEDIUM. | HIGH or MEDIUM |
+
+Each alert has a stable `alert_id`. A condition that persists produces one
+alert per 6-hour bucket, not one per report. Thresholds are in the SQL views;
+after changing one, run `ssb/test/run_local.sh` (Docker) to replay the
+synthetic cases, then stop the job in SSB and re-run `create --yes`.
+
+Known false positives: there is no port database yet, so `STS_ENCOUNTER` can
+fire for ships berthed side by side whose AIS status is not "moored".
+
+To see alerts arriving, run `python tools/tail_alerts.py` in a Workbench
+session (add `--follow` to keep watching). If the job fails on topic
+authorization, the provisioner prints the Ranger Kafka policy to add.
 
 ### Rebuilding the lake
 

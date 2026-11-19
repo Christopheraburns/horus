@@ -76,6 +76,18 @@ class Config:
         return f"horus_{self.instance}_kafka_to_iceberg"
 
     @property
+    def alerts_topic(self) -> str:
+        return f"horus-{self.instance}-alerts"
+
+    @property
+    def detections_job(self) -> str:
+        return f"horus_{self.instance}_detections"
+
+    @property
+    def detections_group(self) -> str:
+        return f"horus-{self.instance}-detections"
+
+    @property
     def gateway_group(self) -> str:
         return f"horus-{self.instance}-feeds-gateway"
 

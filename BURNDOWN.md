@@ -39,7 +39,8 @@ BURNDOWN-DEPLOY A1 and A2.
 
 | ID | Item | Done when | Est | Status |
 |---|---|---|---|---|
-| 4.1 | SSB jobs: AIS gaps (dark vessels), loitering, ship-to-ship encounters, impossible speed jumps, squawk 7500/7600/7700 → `horus-<instance>-alerts` topic | Alerts flow on the dev instance | 8 | Todo |
+| 4.1 | SSB jobs: AIS gaps (dark vessels), loitering, ship-to-ship encounters, impossible speed jumps, squawk 7500/7600/7700 → `horus-<instance>-alerts` topic | Alerts flow on the dev instance | 8 | Built, awaiting dev run: `ssb/04_detections.sql`, job `horus_<instance>_detections`; passes `ssb/test/run_local.sh` (7/7 cases on Flink 1.19). Run `create --yes`, then `tools/tail_alerts.py` |
+| 4.1a | Port and anchorage reference data (self-hosted) to suppress `STS_ENCOUNTER` and `LOITERING` in harbours; tune thresholds on a day of real alerts | False-positive rate acceptable for a demo | 3 | Todo |
 | 4.2 | Iceberg tables `alerts_iceberg` and `findings_iceberg` created by the provisioner | `status` shows both | 2 | Todo |
 | 4.3 | Gateway and UI: ALERTS and AGENT FINDINGS map layers, Time Travel aware | Layers render | 4 | Todo |
 | 4.4 | Analyst writeback: flag and annotate an entity or alert, stored in Iceberg | Note survives restart and shows in Time Travel | 4 | Todo |
