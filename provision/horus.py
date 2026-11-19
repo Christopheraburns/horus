@@ -510,6 +510,79 @@ def update_scripts(cfg: cfgmod.Config, rep: Report, apply: bool) -> int:
     return 0
 
 
+def migrate_lake(cfg: cfgmod.Config, rep: Report, apply: bool) -> int:
+    """Move this instance's events table to lake schema v2 with its history (burndown 16.5)."""
+    import lake
+    import migrate_lake as mig
+    import ssb as ssbmod
+    if not (cfg.workload_user and cfg.workload_password):
+        print("migrate-lake: HORUS_WORKLOAD_USER / HORUS_WORKLOAD_PASSWORD not set")
+        return 1
+    if rep.gateway_env.get("LAKE_ENGINE") != "trino":
+        print("migrate-lake: implemented for Trino warehouses only")
+        return 1
+    if not (_ready(rep.hubs.get("flink")) and rep.ssb_api):
+        print("migrate-lake: the Flink hub is not AVAILABLE (the lake job has to be stopped and restarted)")
+        return 1
+    user, pw = cfg.workload_user, cfg.workload_password
+    host, port = rep.gateway_env["HIVE_HOST"], int(rep.gateway_env["HIVE_PORT"])
+    cat, db, table = cfg.lake_catalog, cfg.database, cfg.table
+    cur = lake._cursor(host, port, user, pw, cat)
+
+    def run(sql: str) -> list:
+        cur.execute(sql)
+        return cur.fetchall()
+
+    version = lake.schema_version(cur, cat, db, table)
+    old_kept = lake.schema_version(cur, cat, db, f"{table}_v1") is not None
+    fq = f"{cat}.{db}.{table}"
+    ca = _ca_bundle(rep.env_name)
+    try:
+        s = ssbmod.SSB(rep.ssb_api, user, pw, verify=ca)
+        pid = s.ensure_project(cfg.ssb_project, f"Horus {db}: lakehouse and detection jobs")
+        job = s.job(pid, cfg.flink_job)
+        state = s.state(pid, job["job_id"]) if job else "not found"
+        if version is None:
+            print(f"migrate-lake: {fq} does not exist; `create --yes` creates it as v2")
+            return 1
+        if version == 2 and old_kept:
+            print(f"migrate-lake: {fq} is already v2 (the v1 table is {table}_v1)")
+        if not apply:
+            if version == 1:
+                rows = run(f"SELECT COUNT(*) FROM {fq}")[0][0]
+                print(f"migrate-lake plan for {fq} ({rows} rows, schema v1):")
+                print(f"  1. stop the lake job {cfg.flink_job} (now {state}) -- NiFi keeps publishing; "
+                      "Kafka holds the messages until step 4")
+                print(f"  2. create {table}_v2 and copy every row into it, a day at a time")
+                print(f"  3. check the counts, then rename {table} -> {table}_v1 and {table}_v2 -> {table}")
+            print(f"  4. start {cfg.flink_job} with the v2 job; it resumes from its committed Kafka offsets")
+            print("\nDry run. Re-run with --yes to apply. Every step is safe to re-run if one fails.")
+            return 0
+        s.unlock_keytab(f"{user}@{rep.realm}", pw)
+        if version == 1:
+            if job and state in ssbmod.HEALTHY:
+                print(f"migrate-lake: stopping {cfg.flink_job} ...")
+                st = s.stop(pid, job["job_id"])
+                if st in ssbmod.HEALTHY:
+                    print(f"migrate-lake: {cfg.flink_job} did not stop (state {st}); stop it in SSB and re-run")
+                    return 1
+                print(f"migrate-lake: {cfg.flink_job} {st}")
+            lake.ensure_table(host, port, user, pw, cat, db, f"{table}_v2")
+            mig.copy(run, cat, db, table)
+            mig.swap(run, cat, db, table)
+        brokers = rep.gateway_env.get("KAFKA_BROKERS", "")
+        st = ssbmod.deploy(s, cfg.ssb_project, db, table, cfg.flink_job,
+                           {"TOPIC": cfg.topic, "GROUP_ID": cfg.lakehouse_group, "BROKERS": brokers,
+                            "KAFKA_USER": user, "KAFKA_PASSWORD": pw})
+        if st != "RUNNING":
+            print(f"migrate-lake: the v2 job is {st}; the table is migrated, fix the job and re-run")
+            return 1
+        print(f"migrate-lake: done. Check Time Travel and Pattern of Life; drop {fq}_v1 after a week.")
+        return 0
+    finally:
+        os.unlink(ca)
+
+
 def _print(rep: Report) -> None:
     marks = {OK: "OK  ", WARN: "WARN", FAIL: "FAIL", TODO: "TODO"}
     width = max(len(r["component"]) for r in rep.rows)
@@ -524,11 +597,11 @@ def _print(rep: Report) -> None:
 
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(prog="horus provision")
-    ap.add_argument("command", choices=["status", "create", "update-scripts"])
+    ap.add_argument("command", choices=["status", "create", "update-scripts", "migrate-lake"])
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     ap.add_argument("--env-file", default=".env")
     ap.add_argument("--yes", action="store_true",
-                    help="create: actually create (billable) resources; update-scripts: apply the updates")
+                    help="create: actually create (billable) resources; update-scripts, migrate-lake: apply")
     ap.add_argument("--wait", action="store_true", help="create: wait until the Data Hubs are AVAILABLE")
     ap.add_argument("--no-start", action="store_true", help="create: import NiFi flows but leave them stopped")
     args = ap.parse_args(argv)
@@ -537,6 +610,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     rep = status(cfg)
     if args.command == "update-scripts":
         return update_scripts(cfg, rep, apply=args.yes)
+    if args.command == "migrate-lake":
+        return migrate_lake(cfg, rep, apply=args.yes)
     if args.command == "create":
         _print(rep)
         if rep.blocked:

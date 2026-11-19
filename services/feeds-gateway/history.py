@@ -187,6 +187,30 @@ def _ts_lit(epoch_ms: int, millis: bool = False) -> str:
     return f"CAST('{s}' AS TIMESTAMP)"
 
 
+_v2_seen = False
+_v2_checked = 0.0
+
+
+def _schema_v2() -> bool:
+    """True once the table has the lake schema v2 columns (docs/LAKE-SCHEMA.md).
+
+    The v1 queries also run on a v2 table, so until v2 is seen the gateway uses
+    them and checks again every BOUNDS_TTL seconds: it can be deployed before the
+    table is migrated and picks up v2 after the swap without a restart.
+    """
+    global _v2_seen, _v2_checked
+    if _v2_seen or time.time() - _v2_checked < BOUNDS_TTL:
+        return _v2_seen
+    _v2_checked = time.time()
+    try:
+        _run(f"SELECT display_name FROM {FQTN} LIMIT 0")
+        _v2_seen = True
+        log.info("lake table %s is schema v2", FQTN)
+    except Exception:  # noqa: BLE001 -- no such column: still v1
+        pass
+    return _v2_seen
+
+
 def _json_str(col: str, path: str) -> str:
     fn = "json_extract_scalar" if LAKE_ENGINE == "trino" else "get_json_object"
     return f"{fn}({col}, '{path}')"
@@ -237,13 +261,17 @@ def _query_window(
     type_clause = _in_clause("asset_type", types)
     if type_clause:
         where.append(type_clause)
-    sql = (
-        # payload.name is the display label the live UI shows (callsign for aircraft,
-        # ship name for vessels) — pull it out so TimeTravel matches real time.
-        f"SELECT asset_id, asset_type, lat, lon, event_time, source_feed, "
+    # The display label the live UI shows (callsign for aircraft, ship name for
+    # vessels), so TimeTravel matches real time. v2 has it as a column; v1 only
+    # inside payload, which is almost all of the table's bytes.
+    if _schema_v2():
+        name = "display_name"
+    else:
         # payload is the full canonical message (entity.name); older rows packed a
         # flat {"name": ...} object, so fall back to that.
-        f"COALESCE({_json_str('payload', '$.entity.name')}, {_json_str('payload', '$.name')}) "
+        name = f"COALESCE({_json_str('payload', '$.entity.name')}, {_json_str('payload', '$.name')})"
+    sql = (
+        f"SELECT asset_id, asset_type, lat, lon, event_time, source_feed, {name} "
         f"FROM {FQTN} WHERE {' AND '.join(where)} "
         f"ORDER BY event_time LIMIT {int(limit)}"
     )

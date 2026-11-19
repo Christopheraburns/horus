@@ -138,8 +138,13 @@ WITH (format = 'PARQUET', format_version = 2,
 
 ## Backfill from v1 payloads (16.5 only)
 
-Old rows have no v2 fields. The migration derives them from `payload` with these
-rules, read from the NiFi scripts as of 2026-11-19. Flink never uses them.
+Old rows have no v2 fields. The migration (`provision/migrate_lake.py`) derives
+them from `payload` with these rules, read from the NiFi scripts as of
+2026-11-19. Flink never uses them. Rows whose payload is already envelope v2
+(written after `update-scripts`, before the migration) take the v2 fields exactly
+as the Flink job does; rows from before the full-payload change (a flat
+`{"name": ...}` payload) keep their columns and get the point as their bounding
+box.
 
 | Column | Rule |
 |---|---|
@@ -150,6 +155,7 @@ rules, read from the NiFi scripts as of 2026-11-19. Flink never uses them.
 | `asset_subtype` | `VESSEL`: `properties.type`, else the AIS `shipType` code (80–89 tanker, 35 military, other non-zero cargo). `FLIGHT`, `WEATHER`: `properties.category`. `FIRE`: `properties.firetype`. `SEISMIC`: null |
 | `id_scheme` | aisstream.io: `mmsi`. hormuz.now: `mmsi`, or `hormuz.now` when `asset_id` starts `hormuz.now:`. opensky: `icao24`. adsb.lol: `icao24` when `asset_id` is a six-digit hex address, `adsb.lol` when it starts with `~` (a non-ICAO address), else `callsign`. USGS `usgs`, NASA-FIRMS `firms`, NASA EONET and NASA-EONET `eonet`, NOAA/NWS `nws` |
 | `releasability` | null |
+| precision | v1 flights kept the track rounded to whole degrees (a missing track as 0, which the backfill can't tell from north), speed to 0.1 knot, and no true heading; v1 hormuz.now headings fell back to the course when not reported. These stay as v1 recorded them |
 | `event_time` | NOAA/NWS: `properties.date` converted to UTC (see below). Everything else: as v1 |
 | everything else | the same paths as v2, all present in v1 |
 
@@ -181,6 +187,7 @@ Run locally with Docker, no platform needed:
 |---|---|
 | `nifi/test/run.sh` | Every NiFi script, on sample input for its feed, meets envelope v2 and gives the expected values |
 | `ssb/test/run_lake_local.sh` | The lake job's views and dedupe (Flink 1.19) turn those envelopes, a duplicate and a v1 message into rows that match a Python reference column by column |
+| `ssb/test/run_migration_local.sh` | The migration on Trino 460: a v1 table filled from the v1 scripts (git `7f1c2dd`) and the v2 scripts, as the v1 job wrote it; every row kept; v2-payload rows equal the Flink job's; v1-payload rows equal their v2 twins within the precision v1 kept; re-run, partial-day redo and swap; the gateway's Time Travel query before and after |
 | `ssb/test/run_trino_local.sh` | `provision/lake.py` on Trino 460: the v2 DDL is accepted, a v1 table is detected and left alone, and Trino's `tile_z8` and `obs_hash` (`lake.TILE_Z8_SQL`, `lake.OBS_HASH_SQL`, used by the backfill) agree with Flink's on every row |
 
 ## Open checks

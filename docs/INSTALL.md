@@ -116,8 +116,18 @@ If the provisioner says the table's codec is not zstd and Trino cannot change it
 run the Impala statement it prints once.
 
 An instance created before schema v2 keeps its v1 table: `create --yes` leaves it
-and its running Flink job alone, and does not submit the v2 job onto it. Moving
-it to v2 with its history is a separate step (burndown 16.5).
+and its running Flink job alone, and does not submit the v2 job onto it. To move
+it to v2 with its history:
+
+1. `python provision/horus.py update-scripts --yes`, so NiFi already sends
+   envelope v2.
+2. `python provision/horus.py migrate-lake` shows the plan; `migrate-lake --yes`
+   runs it. It stops the lake job, copies the table into a v2 table a day at a
+   time, checks the counts, renames the tables (the old one is kept as
+   `events_iceberg_v1`), and starts the v2 job, which resumes from its committed
+   Kafka offsets. NiFi keeps publishing throughout; nothing is lost. Every step is
+   safe to re-run if one fails.
+3. Check Time Travel and Pattern of Life. Drop `events_iceberg_v1` after a week.
 
 ## 6. NiFi flows
 
