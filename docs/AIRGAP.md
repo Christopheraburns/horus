@@ -29,6 +29,7 @@ feed at all.
 | Fires | `https://firms.modaps.eosdis.nasa.gov/data/active_fire/noaa-20-viirs-c2/csv/J1_VIIRS_C2_Global_24h.csv` |
 | Flights | `https://api.adsb.lol/v2/point/…` |
 | Vessels | `wss://stream.aisstream.io/v0/stream` (needs `HORUS_AISSTREAM_API_KEY`) |
+| Vessels (hormuz.now) | `https://hormuz.now/api/snapshot`, every 30 s; Strait of Hormuz and Gulf of Oman only (24–28.5°N, 54–59°E); no key; CC BY 4.0 |
 | Weather (EONET) | `https://eonet.gsfc.nasa.gov/api/v3/events` |
 | Weather (NWS) | `https://api.weather.gov/alerts/active` |
 

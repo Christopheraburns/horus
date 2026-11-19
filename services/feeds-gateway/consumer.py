@@ -94,29 +94,45 @@ class FeedStore:
                 item = self._merge_vessel(bucket[entity_id][0], item)
             bucket[entity_id] = (item, time.monotonic())
 
+    # Descriptors only some reports carry; kept until a report replaces them.
+    _VESSEL_STATIC_FIELDS = ("imo", "destination", "type", "flag")
+
     @staticmethod
     def _merge_vessel(prev: dict, new: dict) -> dict:
-        """Carry AIS ShipStaticData fields across frequent PositionReport overwrites.
+        """Merge a vessel report into the one already held for its MMSI.
 
-        Vessels are MMSI-keyed; PositionReports (position + speed, no IMO) arrive
-        far more often than ShipStaticData (name/destination/IMO ~every 6 min).
-        Without merging, the IMO graph-join key is lost seconds after it lands and
-        vessel Deep-Dive intel never resolves. The direct aisstream path
-        (src/app/api/maritime/route.ts) already merges per-MMSI; this brings the
-        streaming path to parity. New position/speed/heading always win; static
-        descriptors are only carried forward when the incoming record omits them.
+        Vessels are MMSI-keyed and can come from several feeds (aisstream.io,
+        hormuz.now). Two rules:
+
+        - Static descriptors (IMO, destination, type, flag) ride only some
+          reports -- aisstream sends IMO and destination in ShipStaticData,
+          not in the far more frequent PositionReports -- so they are carried
+          forward when the incoming report omits them. IMO is the graph join
+          key; without this, vessel Deep-Dive intel never resolves.
+        - A report older than the one already held (another feed's delayed
+          copy) changes nothing it already has: it only fills missing fields and
+          adds its feed to ``sources``. Otherwise the newest report wins.
         """
-        merged = dict(new)
         mmsi = str(new.get("mmsi") or "")
-        # IMO is the graph join key and only rides ShipStaticData — never drop it.
-        if merged.get("imo") is None and prev.get("imo") is not None:
-            merged["imo"] = prev["imo"]
-        # Destination only rides ShipStaticData; keep it across position updates.
-        if merged.get("destination") in (None, "") and prev.get("destination") not in (None, ""):
-            merged["destination"] = prev["destination"]
+        new_ts, prev_ts = new.get("timestamp"), prev.get("timestamp")
+        if isinstance(new_ts, (int, float)) and isinstance(prev_ts, (int, float)) and new_ts < prev_ts:
+            merged = dict(prev)
+            for key, value in new.items():
+                if merged.get(key) in (None, "") and value not in (None, ""):
+                    merged[key] = value
+        else:
+            merged = dict(new)
+        for key in FeedStore._VESSEL_STATIC_FIELDS:
+            if merged.get(key) in (None, "") and prev.get(key) not in (None, ""):
+                merged[key] = prev[key]
         # Don't let a PositionReport's MMSI-fallback name clobber a real name.
         if merged.get("name") in (None, "", mmsi) and prev.get("name") not in (None, "", mmsi):
             merged["name"] = prev["name"]
+        sources = dict(prev.get("sources") or {})
+        for provider, ts in (new.get("sources") or {}).items():
+            sources[provider] = max(ts, sources.get(provider, ts))
+        if sources:
+            merged["sources"] = sources
         return merged
 
     async def clear(self) -> None:

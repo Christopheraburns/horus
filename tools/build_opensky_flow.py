@@ -11,10 +11,11 @@ nifi/scripts/flights-opensky.groovy. Run it again after editing the Groovy:
 It also keeps the adsb.lol flow under adsb.lol's anonymous limit
 (500 requests a day): 6 points every 20 minutes is 432 a day.
 """
-import copy
 import json
 import os
 import uuid
+
+from flowgen import add_parameters, derive_poll_flow, descriptor, id_maker
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NIFI = os.path.join(ROOT, "nifi")
@@ -37,56 +38,16 @@ ADSB_CRON = "0 0/12 0-3,13-23 * * ?"
 ADSB_LABEL = "7AM-10PM CT, every 12 min"
 
 
-def sid(name: str) -> str:
-    return str(uuid.uuid5(NS, name))
-
-
-def descriptor(name, display, sensitive=False, service=False):
-    return {"name": name, "displayName": display, "identifiesControllerService": service,
-            "sensitive": sensitive, "dynamic": False}
+sid = id_maker(NS)
 
 
 def build() -> dict:
-    src = json.load(open(SRC))
-    flow = copy.deepcopy(src)
-    fc = flow["flowContents"]
-    gid = sid("group")
-    fc["identifier"] = gid
-    fc["instanceIdentifier"] = sid("group-instance")
-    fc["name"] = "HORUS - Flights (OpenSky)"
-
-    def by_type(suffix):
-        return next(p for p in fc["processors"] if p["type"].endswith(suffix))
-    gen = by_type(".GenerateFlowFile")
-    invoke = by_type(".InvokeHTTP")
-    transform = by_type(".ExecuteScript")
-    publish = by_type(".PublishKafka")
-    keep = [gen, invoke, transform, publish]
-
-    # New ids for every component, scoped to this group.
-    old_to_new = {}
-    for p in keep:
-        new = sid("proc:" + p["name"])
-        old_to_new[p["identifier"]] = new
-        p["identifier"] = new
-        p["instanceIdentifier"] = sid("proc-instance:" + p["name"])
-        p["groupIdentifier"] = gid
-    for f in fc.get("funnels", []):
-        new = sid("funnel")
-        old_to_new[f["identifier"]] = new
-        f["identifier"], f["instanceIdentifier"], f["groupIdentifier"] = new, sid("funnel-instance"), gid
-    kafka_cs = fc["controllerServices"][0]
-    kafka_new = sid("cs:kafka")
-    old_to_new[kafka_cs["identifier"]] = kafka_new
-    kafka_cs["identifier"], kafka_cs["instanceIdentifier"], kafka_cs["groupIdentifier"] = \
-        kafka_new, sid("cs-instance:kafka"), gid
-    publish["properties"]["Kafka Connection Service"] = kafka_new
-
-    # Trigger: a plain timer (no coordinates).
-    gen["name"] = f"Trigger OpenSky ({POLL})"
-    gen["schedulingPeriod"] = POLL
-    gen["properties"]["generate-ff-custom-text"] = ""
-    gen["position"] = {"x": -600.0, "y": -200.0}
+    flow, parts = derive_poll_flow(
+        sid, "HORUS - Flights (OpenSky)", f"Trigger OpenSky ({POLL})", POLL,
+        "Get OpenSky states", {}, "Transform OpenSky to Horus events", GROOVY,
+        # The trigger's id dates from when the adsb.lol trigger had this name.
+        trigger_key="proc:Generate Coordinates for ADSB.lol (20 min)")
+    gid, invoke = parts["group_id"], parts["invoke"]
 
     # OAuth2 client-credentials token provider (built into NiFi).
     oauth_id = sid("cs:oauth2")
@@ -124,10 +85,9 @@ def build() -> dict:
         "componentType": "CONTROLLER_SERVICE",
         "groupIdentifier": gid,
     }
-    fc["controllerServices"] = [kafka_cs, oauth]
+    flow["flowContents"]["controllerServices"].append(oauth)
 
     # InvokeHTTP: one global request with the token.
-    invoke["name"] = "Get OpenSky states"
     invoke["properties"].update({
         "HTTP URL": OPENSKY_URL,
         "Request OAuth2 Access Token Provider": oauth_id,
@@ -138,55 +98,12 @@ def build() -> dict:
     })
     invoke["propertyDescriptors"]["Request OAuth2 Access Token Provider"] = descriptor(
         "Request OAuth2 Access Token Provider", "Request OAuth2 Access Token Provider", service=True)
-    invoke["position"] = {"x": -184.0, "y": -200.0}
 
-    transform["name"] = "Transform OpenSky to Horus events"
-    transform["properties"]["Script Body"] = open(GROOVY).read()
-
-    fc["processors"] = keep
-
-    # Connections: trigger -> invoke -> transform -> publish; failures to the funnel.
-    funnel = fc["funnels"][0]["identifier"] if fc.get("funnels") else None
-    by_id = {p["identifier"]: p for p in keep}
-    conns = []
-    for c in fc["connections"]:
-        src_old, dst_old = c["source"]["id"], c["destination"]["id"]
-        src_new, dst_new = old_to_new.get(src_old), old_to_new.get(dst_old)
-        if src_new is None or dst_new is None:
-            continue   # touched Split Coords / EvaluateJsonPath
-        conns.append((c, src_new, dst_new))
-    conns.append((copy.deepcopy(fc["connections"][0]), gen["identifier"], invoke["identifier"]))
-    conns[-1][0]["selectedRelationships"] = ["success"]
-
-    out = []
-    for i, (c, s, d) in enumerate(conns):
-        c = copy.deepcopy(c)
-        key = f"conn:{s}:{d}:{','.join(sorted(c['selectedRelationships']))}"
-        c["identifier"], c["instanceIdentifier"], c["groupIdentifier"] = sid(key), sid(key + ":i"), gid
-        for end, new in (("source", s), ("destination", d)):
-            c[end]["id"] = new
-            c[end]["groupId"] = gid
-            if new in by_id:
-                c[end]["name"] = by_id[new]["name"]
-                c[end]["type"] = "PROCESSOR"
-                c[end]["instanceIdentifier"] = by_id[new]["instanceIdentifier"]
-            elif new == funnel:
-                c[end]["type"] = "FUNNEL"
-        out.append(c)
-    fc["connections"] = out
-
-    # Parameters: add the OpenSky client credentials (values are set by the provisioner).
-    ctx = next(iter(flow["parameterContexts"].values()))
-    names = {p["name"] for p in ctx["parameters"]}
-    for name, desc, sensitive in (
+    # Parameters: the OpenSky client credentials (values are set by the provisioner).
+    add_parameters(flow, (
         ("opensky.client.id", "OpenSky API client ID (Flights OpenSky flow)", False),
         ("opensky.client.secret", "OpenSky API client secret (Flights OpenSky flow)", True),
-    ):
-        if name not in names:
-            p = {"name": name, "description": desc, "sensitive": sensitive, "provided": False}
-            if not sensitive:
-                p["value"] = ""
-            ctx["parameters"].append(p)
+    ))
     return flow
 
 
