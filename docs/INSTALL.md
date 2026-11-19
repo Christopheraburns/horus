@@ -107,9 +107,17 @@ Kafka policy you need.
 
 ## 5. Lakehouse table
 
-`create --yes` creates `iceberg.horus_<instance>.events_iceberg` (Iceberg v2,
-Parquet) through the Trino virtual warehouse. The table stays empty until the
-Flink job is running.
+`create --yes` creates `iceberg.horus_<instance>.events_iceberg` through the
+Trino virtual warehouse: lake schema v2 ([LAKE-SCHEMA.md](LAKE-SCHEMA.md)),
+Iceberg format v2, Parquet with zstd, partitioned by day and sorted by map tile.
+The table stays empty until the Flink job is running.
+
+If the provisioner says the table's codec is not zstd and Trino cannot change it,
+run the Impala statement it prints once.
+
+An instance created before schema v2 keeps its v1 table: `create --yes` leaves it
+and its running Flink job alone, and does not submit the v2 job onto it. Moving
+it to v2 with its history is a separate step (burndown 16.5).
 
 ## 6. NiFi flows
 
@@ -130,9 +138,15 @@ Flights come from two flows:
 When both run, they publish to the same topic. The live map keeps the newest position per
 aircraft. The lake keeps both, tagged by `source_provider`.
 
-Re-running `create --yes` doesn't change flows that already exist in NiFi. To
-pick up a changed flow, delete its process group in NiFi first (stop it and
-empty its queues), then re-run.
+Re-running `create --yes` doesn't change flows that already exist in NiFi.
+
+- **A changed transform script** (`nifi/scripts/`): run
+  `python provision/horus.py update-scripts` to see which flows differ, then
+  `update-scripts --yes` to update them. Each ExecuteScript processor is stopped,
+  given the new script and started again; its state (hormuz.now's last
+  positions) is kept.
+- **Any other change to a flow:** delete its process group in NiFi first (stop
+  it and empty its queues), then re-run `create --yes`.
 
 ## 7. Ranger policies (manual, once per instance)
 

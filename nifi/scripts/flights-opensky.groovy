@@ -110,15 +110,23 @@ states.each { s ->
         name          : name,
         domain        : 'AIR',
         entityType    : 'FLIGHT',
+        subtype       : category,
         position      : [lat: lat as Double, lng: lon as Double, alt: altMeters],
+        motion        : [
+            speedMps  : (velocity instanceof Number) ? (velocity as Double) : null,   // OpenSky reports m/s
+            courseDeg : (track instanceof Number) ? (track as Double) : null,
+            headingDeg: null,                                                     // not reported
+        ],
         threat        : (category == 'military') ? 'LOW' : 'NONE',
         classification: 'UNCLASSIFIED',
+        releasability : null,
         confidence    : 0.9,
         timestamp     : iso(timePos as long),
         source        : [
             provider  : provider,
             feed      : feed,
             originalId: hex,
+            idScheme  : 'icao24',
             confidence: 0.9,
             sourceUrl : sourceUrl,
         ],
@@ -142,7 +150,7 @@ states.each { s ->
 
     def traceId = UUID.randomUUID().toString()
     def envelope = [
-        schema_version: 1,
+        schema_version: 2,
         trace_id      : traceId,
         ingest_run_id : ingestRunId,
         source        : feed,

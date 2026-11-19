@@ -336,10 +336,11 @@ def deploy_data_plane(cfg: cfgmod.Config, rep: Report, start_flows: bool) -> int
         else:
             print("kafka: hub not AVAILABLE yet; topic skipped")
 
+        lake_version = None   # None: unknown (not Trino, or it failed)
         if rep.gateway_env.get("LAKE_ENGINE") == "trino":
             import lake
             try:
-                lake.ensure_table(rep.gateway_env["HIVE_HOST"], int(rep.gateway_env["HIVE_PORT"]), user, pw,
+                lake_version = lake.ensure_table(rep.gateway_env["HIVE_HOST"], int(rep.gateway_env["HIVE_PORT"]), user, pw,
                                   cfg.lake_catalog, cfg.database, cfg.table)
             except Exception as e:  # noqa: BLE001
                 print(f"lake: FAILED: {e}")
@@ -373,12 +374,18 @@ def deploy_data_plane(cfg: cfgmod.Config, rep: Report, start_flows: bool) -> int
 
         if _ready(rep.hubs.get("flink")) and rep.ssb_api and kafka_ok:
             import ssb as ssbmod
+            s = None
             try:
                 s = ssbmod.SSB(rep.ssb_api, user, pw, verify=ca)
                 s.unlock_keytab(f"{user}@{rep.realm}", pw)   # SSB runs the job as this user
-                ssbmod.deploy(s, cfg.ssb_project, cfg.database, cfg.table, cfg.flink_job,
-                              {"TOPIC": cfg.topic, "GROUP_ID": cfg.lakehouse_group,
-                               "BROKERS": ",".join(brokers), "KAFKA_USER": user, "KAFKA_PASSWORD": pw})
+                if lake_version == 1:
+                    # The job template writes schema v2; never submit it onto a v1 table.
+                    print("ssb: lake job not submitted: the events table is schema v1 (migrate it first, "
+                          "burndown 16.5); a running v1 job is left as it is")
+                else:
+                    ssbmod.deploy(s, cfg.ssb_project, cfg.database, cfg.table, cfg.flink_job,
+                                  {"TOPIC": cfg.topic, "GROUP_ID": cfg.lakehouse_group,
+                                   "BROKERS": ",".join(brokers), "KAFKA_USER": user, "KAFKA_PASSWORD": pw})
             except Exception as e:  # noqa: BLE001
                 print(f"ssb: FAILED: {e}")
                 failures += 1
@@ -482,6 +489,27 @@ def check_data_plane(cfg: cfgmod.Config, rep: Report) -> None:
         os.unlink(ca)
 
 
+def update_scripts(cfg: cfgmod.Config, rep: Report, apply: bool) -> int:
+    """Push changed transform scripts (nifi/scripts/) into this instance's imported flows."""
+    if not (cfg.workload_user and cfg.workload_password):
+        print("update-scripts: HORUS_WORKLOAD_USER / HORUS_WORKLOAD_PASSWORD not set")
+        return 1
+    if not (_ready(rep.hubs.get("nifi")) and rep.nifi_api):
+        print("update-scripts: the NiFi hub is not AVAILABLE")
+        return 1
+    import nifi as nifimod
+    ca = _ca_bundle(rep.env_name)
+    try:
+        n = nifimod.NiFi(rep.nifi_api, cfg.workload_user, cfg.workload_password, verify=ca)
+        changed = nifimod.update_scripts(n, cfg.instance, cfg.parameter_context, apply,
+                                         optional=cfg.optional_flows)
+    finally:
+        os.unlink(ca)
+    if changed and not apply:
+        print(f"\n{changed} script(s) differ. Dry run; re-run with --yes to update them.")
+    return 0
+
+
 def _print(rep: Report) -> None:
     marks = {OK: "OK  ", WARN: "WARN", FAIL: "FAIL", TODO: "TODO"}
     width = max(len(r["component"]) for r in rep.rows)
@@ -496,16 +524,19 @@ def _print(rep: Report) -> None:
 
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(prog="horus provision")
-    ap.add_argument("command", choices=["status", "create"])
+    ap.add_argument("command", choices=["status", "create", "update-scripts"])
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     ap.add_argument("--env-file", default=".env")
-    ap.add_argument("--yes", action="store_true", help="create: actually create (billable) resources")
+    ap.add_argument("--yes", action="store_true",
+                    help="create: actually create (billable) resources; update-scripts: apply the updates")
     ap.add_argument("--wait", action="store_true", help="create: wait until the Data Hubs are AVAILABLE")
     ap.add_argument("--no-start", action="store_true", help="create: import NiFi flows but leave them stopped")
     args = ap.parse_args(argv)
 
     cfg = cfgmod.load(args.env_file)
     rep = status(cfg)
+    if args.command == "update-scripts":
+        return update_scripts(cfg, rep, apply=args.yes)
     if args.command == "create":
         _print(rep)
         if rep.blocked:

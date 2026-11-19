@@ -95,8 +95,9 @@ Feed cadence as shipped: earthquakes ~8 min, fires/weather 10 min, flights
 2. Ranger: grant `ssb` and the workload user on database `horus` (Hadoop SQL) and
    on its S3 warehouse path (RAZ / S3 policy). If `ssb` is not in Ranger, add it
    manually.
-3. SSB: confirm the Hive catalog is registered; put its name in
-   `ssb/01_events_iceberg_ddl.sql` and run it.
+3. Trino (CDW): fill in the catalog and database in
+   `ssb/01_events_iceberg_ddl.sql` and run it (the provisioner does this for you;
+   Flink cannot declare the table's partitioning or sort order).
 4. SSB: open `ssb/02_kafka_to_iceberg.sql`, fill the placeholders in the editor,
    **enable checkpointing** in job settings, run.
 5. Hue: run `ssb/03_verify.sql`. Row counts should grow between runs. If new

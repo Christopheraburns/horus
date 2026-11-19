@@ -54,7 +54,7 @@ Version 2 is additive: every v1 field keeps its name and meaning, except
 
 | Field | New in v2 | Meaning |
 |---|---|---|
-| `entity.timestamp` | | When the source observed it, not when NiFi received it (16.3) |
+| `entity.timestamp` | | When the source observed it, not when NiFi received it (16.3). UTC, ISO-8601 with `Z`, to the second, like `captured_at` |
 | `entity.position.alt` | Corrected | Metres above sea level as the source reports it (barometric for aircraft). `null` when not measured: vessels, fires, weather. USGS depth moves out of `alt` and stays in `properties.depth` |
 | `entity.subtype` | Yes | The feed's own category: flight category (`commercial`, `private`, `jet`, `military`), vessel type (`cargo`, `tanker`, `military`, ...), weather category, fire type. Optional |
 | `entity.motion.speedMps` | Yes | Speed over ground, metres per second |
@@ -65,7 +65,9 @@ Version 2 is additive: every v1 field keeps its name and meaning, except
 | `entity.releasability` | Yes | Who the record may be shared with (section 13); beside the existing `classification` |
 | `entity.source.idScheme` | Yes | What kind of identifier `entity.id` is: `mmsi`, `icao24`, `callsign`, or a provider namespace (`usgs`, `firms`, `eonet`, `nws`, `hormuz.now`) |
 
-Each NiFi script maps its feed's fields into these. For example, aisstream maps
+Each NiFi script (`nifi/scripts/`, embedded into the flows by
+`tools/sync_scripts.py`) maps its feed's fields into these, and
+`nifi/test/run.sh` checks every script's output against this contract. For example, aisstream maps
 `Sog` (knots) to `speedMps` and its ship type code to `subtype`, and adsb.lol
 maps `track` to `courseDeg` (aircraft feeds report no heading).
 
@@ -146,8 +148,9 @@ rules, read from the NiFi scripts as of 2026-11-19. Flink never uses them.
 | `course_deg` | `FLIGHT`: `properties.heading` (it is the track). `VESSEL`: `properties.cog` |
 | `heading_deg` | `VESSEL`: `properties.heading`, null when 511. `FLIGHT`: null |
 | `asset_subtype` | `VESSEL`: `properties.type`, else the AIS `shipType` code (80–89 tanker, 35 military, other non-zero cargo). `FLIGHT`, `WEATHER`: `properties.category`. `FIRE`: `properties.firetype`. `SEISMIC`: null |
-| `id_scheme` | aisstream.io: `mmsi`. hormuz.now: `mmsi`, or `hormuz.now` when `asset_id` starts `hormuz.now:`. opensky: `icao24`. adsb.lol: `icao24` when `asset_id` is a hex address, else `callsign`. USGS `usgs`, NASA-FIRMS `firms`, NASA EONET and NASA-EONET `eonet`, NOAA/NWS `nws` |
+| `id_scheme` | aisstream.io: `mmsi`. hormuz.now: `mmsi`, or `hormuz.now` when `asset_id` starts `hormuz.now:`. opensky: `icao24`. adsb.lol: `icao24` when `asset_id` is a six-digit hex address, `adsb.lol` when it starts with `~` (a non-ICAO address), else `callsign`. USGS `usgs`, NASA-FIRMS `firms`, NASA EONET and NASA-EONET `eonet`, NOAA/NWS `nws` |
 | `releasability` | null |
+| `event_time` | NOAA/NWS: `properties.date` converted to UTC (see below). Everything else: as v1 |
 | everything else | the same paths as v2, all present in v1 |
 
 ## Found while writing this
@@ -165,13 +168,30 @@ Each is fixed by v2 or by its backfill rule:
 - **Receive time as event time.** aisstream (16.3) and also adsb.lol (whose
   `seen_pos` gives the position's age) stamp `entity.timestamp` with the time NiFi
   received the report.
+- **NWS times off by the local offset.** NWS sends `effective` with a local
+  offset (`2025-11-19T17:00:00-06:00`); the lake job cuts it to 19 characters and
+  reads it as UTC, so an alert lands 4 to 10 hours early. The NWS script now
+  converts to UTC; backfilled NWS rows are corrected from `properties.date`.
 
-## Open checks for 16.2 and 16.6
+## Tests
 
-- How to set `write.parquet.compression-codec=zstd` on the table. Trino's
-  `extra_properties` needs a recent Trino; otherwise set it through Impala or
-  Hive `ALTER TABLE ... SET TBLPROPERTIES`. Confirm the Flink sink honours it.
-- Whether CDW Trino's `ALTER TABLE ... EXECUTE optimize` applies `sorted_by`.
-  If it doesn't, the maintenance job (16.6) uses Spark's `rewrite_data_files`
-  with the sort strategy.
-- The SSB Flink Iceberg sink writing a partitioned format-v2 table.
+Run locally with Docker, no platform needed:
+
+| Test | Checks |
+|---|---|
+| `nifi/test/run.sh` | Every NiFi script, on sample input for its feed, meets envelope v2 and gives the expected values |
+| `ssb/test/run_lake_local.sh` | The lake job's views and dedupe (Flink 1.19) turn those envelopes, a duplicate and a v1 message into rows that match a Python reference column by column |
+| `ssb/test/run_trino_local.sh` | `provision/lake.py` on Trino 460: the v2 DDL is accepted, a v1 table is detected and left alone, and Trino's `tile_z8` and `obs_hash` (`lake.TILE_Z8_SQL`, `lake.OBS_HASH_SQL`, used by the backfill) agree with Flink's on every row |
+
+## Open checks
+
+- **zstd, settled 2026-11-19:** Trino writes its own codec (ZSTD by default) into
+  the table property `write.parquet.compression-codec` on `CREATE TABLE`, and
+  the Flink writer reads that property. Trino 460 has no `extra_properties`, so
+  `lake.py` only falls back to printing an Impala statement if the CDW Trino is
+  configured with another codec.
+- **The SSB Flink Iceberg sink on a partitioned format-v2 table:** first seen
+  on the platform when the migration (16.5) starts the v2 job.
+- **Compaction applying `sorted_by`** (16.6): whether CDW Trino's
+  `ALTER TABLE ... EXECUTE optimize` applies the sort order. If it doesn't, the
+  maintenance job uses Spark's `rewrite_data_files` with the sort strategy.

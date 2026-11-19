@@ -125,6 +125,34 @@ class NiFi:
         self._req("PUT", f"/flow/process-groups/{group_id}",
                   json={"id": group_id, "state": state, "disconnectedNodeAcknowledged": False})
 
+    # -- processors -----------------------------------------------------------
+    def processors(self, group_id: str) -> List[dict]:
+        """Every processor in a group and its sub-groups."""
+        out = list(self.get(f"/process-groups/{group_id}/processors").get("processors", []))
+        for g in self.child_groups(group_id):
+            out += self.processors(g["id"])
+        return out
+
+    def set_processor_state(self, proc: dict, state: str, timeout_s: int = 60) -> dict:
+        """RUNNING or STOPPED; waits for a stop to finish (no active threads)."""
+        self._req("PUT", f"/processors/{proc['id']}/run-status",
+                  json={"revision": proc["revision"], "state": state, "disconnectedNodeAcknowledged": False})
+        deadline = time.time() + timeout_s
+        while True:
+            p = self.get(f"/processors/{proc['id']}")
+            stopped = p["component"]["state"] != "RUNNING" and not p.get("status", {}).get(
+                "aggregateSnapshot", {}).get("activeThreadCount", 0)
+            if state != "STOPPED" or stopped:
+                return p
+            if time.time() > deadline:
+                raise NiFiError(f"processor {p['component']['name']} did not stop within {timeout_s}s")
+            time.sleep(2)
+
+    def set_property(self, proc: dict, name: str, value: str) -> dict:
+        body = {"revision": proc["revision"], "disconnectedNodeAcknowledged": False,
+                "component": {"id": proc["id"], "config": {"properties": {name: value}}}}
+        return self._req("PUT", f"/processors/{proc['id']}", json=body)
+
 
 # Flows that are imported and started only when asked for (HORUS_ENABLE_OPENSKY=1).
 # OpenSky blocks cloud-provider addresses, so from AWS its flow can only time out.
@@ -171,6 +199,64 @@ def inspect(nifi: NiFi, instance: str, ctx_name: str, optional: frozenset = froz
             groups[name[len(prefix):]] = {k: g.get(k, 0) for k in
                                           ("runningCount", "stoppedCount", "invalidCount", "disabledCount")}
     return {"context": ctx, "groups": groups, "expected": len(wanted)}
+
+
+SCRIPT_PROCESSOR = "org.apache.nifi.processors.script.ExecuteScript"
+
+
+def _script_bodies(flow: dict) -> List[str]:
+    found = []
+
+    def walk(g):
+        for p in g.get("processors", []):
+            if p.get("type") == SCRIPT_PROCESSOR and "Script Body" in p.get("properties", {}):
+                found.append(p["properties"]["Script Body"])
+        for sub in g.get("processGroups", []):
+            walk(sub)
+    walk(flow["flowContents"])
+    return found
+
+
+def update_scripts(nifi: NiFi, instance: str, ctx_name: str, apply: bool, log=print,
+                   optional: frozenset = frozenset()) -> int:
+    """Bring the transform scripts of already-imported flows up to date.
+
+    `deploy` leaves existing flows alone, so a changed script in nifi/ never
+    reaches a running instance on its own. For each Horus flow present in NiFi,
+    compare its ExecuteScript body with the repository's; with ``apply``, stop
+    the processor, set the new body and start it again if it was running. The
+    processor's local state (hormuz.now's last positions) is kept. Returns the
+    number of processors that differ (or were updated).
+    """
+    root = nifi.root_id()
+    by_name = {g["component"]["name"]: g for g in nifi.child_groups(root)}
+    changed = 0
+    for name, flow in load_flows(instance, ctx_name, optional):
+        g = by_name.get(name)
+        if g is None:
+            log(f"nifi: {name} not imported; `create --yes` imports it")
+            continue
+        bodies = _script_bodies(flow)
+        procs = [p for p in nifi.processors(g["id"]) if p["component"]["type"] == SCRIPT_PROCESSOR]
+        if len(bodies) != 1 or len(procs) != 1:
+            log(f"nifi: {name}: expected one ExecuteScript, found {len(procs)} in NiFi and "
+                f"{len(bodies)} in the flow file; update it by hand")
+            continue
+        proc, body = procs[0], bodies[0]
+        if proc["component"]["config"]["properties"].get("Script Body") == body:
+            log(f"nifi: {name}: script up to date")
+            continue
+        changed += 1
+        if not apply:
+            log(f"nifi: {name}: script differs (would update {proc['component']['name']})")
+            continue
+        was_running = proc["component"]["state"] == "RUNNING"
+        proc = nifi.set_processor_state(proc, "STOPPED")
+        proc = nifi.set_property(proc, "Script Body", body)
+        if was_running:
+            nifi.set_processor_state(proc, "RUNNING")
+        log(f"nifi: {name}: script updated" + (" and restarted" if was_running else " (left stopped)"))
+    return changed
 
 
 def deploy(nifi: NiFi, instance: str, ctx_name: str, params: Dict[str, tuple],

@@ -259,18 +259,18 @@ views per asset type come later from the Helios semantic model (O0b).
 | ID | Item | Done when | Est | Status |
 |---|---|---|---|---|
 | 16.1 | Schema v2, written down: `tile_z8` (Web Mercator tile at zoom 8, same formula in Flink and Trino); optional `geom_wkt` plus a bounding box for shapes; `alt_m`, `speed_mps`, `course_deg`, `heading_deg`; `display_name`, `asset_subtype`; `id_scheme`; `event_id` as `provider:originalId`; `obs_hash`; `classification`, `releasability`; `captured_at` as a timestamp. Table: partition by day of `event_time`, sort by `tile_z8` then time, zstd, Iceberg format v2. Drafted 2026-11-19 in [docs/LAKE-SCHEMA.md](docs/LAKE-SCHEMA.md), with envelope v2 (the new fields go in the envelope so the Flink job stays generic) and the per-feed backfill rules | Schema agreed and documented | 1 | Done (2026-11-19) |
-| 16.2 | Apply it: `ssb/01_events_iceberg_ddl.sql`, `provision/lake.py` and the Flink job `ssb/02_kafka_to_iceberg.sql`; envelope v2 in all eight NiFi scripts (`subtype`, `motion`, `idScheme`, `releasability`, corrected `alt`) and the flows regenerated; resolve LAKE-SCHEMA.md's open checks (zstd property, Flink sink on a partitioned v2 table) | A fresh `create --yes` builds the v2 table and the job fills every column; the live map looks the same in the UI | 5 | Todo |
-| 16.3 | Report times, not NiFi's receive time: aisstream from `MetaData.time_utc`; adsb.lol from the response time minus each aircraft's `seen_pos` | aisstream and adsb.lol rows carry report times | 0.5 | Todo |
+| 16.2 | Apply it: `ssb/01_events_iceberg_ddl.sql`, `provision/lake.py` and the Flink job `ssb/02_kafka_to_iceberg.sql`; envelope v2 in all eight NiFi scripts (`subtype`, `motion`, `idScheme`, `releasability`, corrected `alt`) and the flows regenerated; resolve LAKE-SCHEMA.md's open checks (zstd property, Flink sink on a partitioned v2 table) | A fresh `create --yes` builds the v2 table and the job fills every column; the live map looks the same in the UI | 5 | Doing: code done 2026-11-19 and the three local tests pass (LAKE-SCHEMA.md, Tests); `update-scripts --yes` and the live-map check next; the v2 table and job first run on the platform in 16.5 |
+| 16.3 | Report times, not NiFi's receive time: aisstream from `MetaData.time_utc`; adsb.lol from the response time minus each aircraft's `seen_pos` | aisstream and adsb.lol rows carry report times | 0.5 | Doing: in the 16.2 scripts, tested locally; check rows once deployed |
 | 16.4 | Gateway queries over the lake (history, replay, pattern of life) use the new columns instead of reading `payload` | Time Travel and Pattern of Life work on v2 | 1.5 | Todo |
-| 16.5 | Migrate with history: create v2, fill it from the old table in Trino (every new column derives from `payload`), swap, restart the Flink job from its Kafka offsets; keep the old table a week, then drop it | No rows lost; old table dropped | 1 | Todo |
+| 16.5 | Migrate with history, in this order: NiFi scripts to envelope v2 first (`update-scripts --yes`; the v1 job ignores the new fields); stop the v1 lake job in SSB; create v2 (`lake.ensure_table` under a new name), fill it from the old table in Trino using the backfill rules (LAKE-SCHEMA.md; `lake.TILE_Z8_SQL`, `lake.OBS_HASH_SQL`), swap names, start the v2 job from the v1 job's Kafka offsets so every message it reads is v2; keep the old table a week, then drop it | No rows lost; old table dropped | 1 | Todo |
 | 16.6 | Table maintenance job on a schedule: compact small files applying the sort, expire snapshots, remove orphan files | File count stays flat day to day | 2 | Todo |
-| 16.7 | Checks: the Flink and Trino tile formulas agree; a bounding-box query skips most files | Both shown in a test | 1 | Todo |
+| 16.7 | Checks: the Flink and Trino tile formulas agree; a bounding-box query skips most files | Both shown in a test | 1 | Doing: formulas agree (`ssb/test/run_trino_local.sh`, 2026-11-19, with `obs_hash`); file skipping after 16.6 |
 
 ## Carried over
 
 | ID | Item | Status |
 |---|---|---|
-| C1 | Test the provisioner on a fresh instance; update path for already-imported NiFi flows | Todo |
+| C1 | Test the provisioner on a fresh instance; update path for already-imported NiFi flows. Scripts: `horus.py update-scripts` (2026-11-19, not yet run on the platform); other flow changes still need a delete and re-import | Todo |
 | C2 | Verify the NWS weather flow contributes rows | Todo |
 | C3 | `.project-metadata.yaml` (AMP) | Todo |
 | C4 | Fold RUNBOOK.md into INSTALL.md | Todo |

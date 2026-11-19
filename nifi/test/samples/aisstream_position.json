@@ -1,0 +1,1 @@
+{"MessageType": "PositionReport", "MetaData": {"MMSI": 636019825, "ShipName": "PACIFIC TRADER      ", "latitude": 26.41, "longitude": 56.22, "time_utc": "2025-11-19 18:01:58.123456789 +0000 UTC"}, "Message": {"PositionReport": {"Cog": 112.0, "Sog": 12.5, "TrueHeading": 110, "NavigationalStatus": 0}}}
