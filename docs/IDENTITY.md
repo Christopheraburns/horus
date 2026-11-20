@@ -84,6 +84,10 @@ The entity index stores identity as rows, with no domain columns:
 | `source`, `confidence` | Who said so, and how sure |
 | `status` | `active`, `contested` (claimed by more than one entity at once), or `ended` |
 
+An entity can hold several values of one scheme at once, unless the scheme is
+permanent: a source may list one thing under two of its own ids (seen with
+hormuz.now, evidence 7). Exclusivity is the other direction: one value, one entity.
+
 ### Resolution
 
 Entity resolution (O12) reads only the declarations above:
@@ -166,8 +170,8 @@ later.
 
 ### Open question for the packs
 
-3. Check the windows and limits (10 minutes and 50 knots for vessels, 5 minutes and
-   Mach 3 for aircraft) against real cases (evidence query 3) before fixing them.
+3. **Vessels settled** by evidence 7: 10 minutes and 50 knots. Aircraft (5 minutes,
+   Mach 3) still to check, once there is an aircraft case.
 
 ---
 
@@ -181,7 +185,7 @@ Schemes that only mean something inside one feed:
 
 | Scheme | Strength | Scope | Validity | Exclusive | For | Notes |
 |---|---|---|---|---|---|---|
-| `hormuz.now` | strong | provider | reassignable | yes | Vessel | hormuz.now's own vessel id. Links reports within hormuz.now only. Used when a vessel has no valid MMSI, and to tell apart the vessels behind a shared MMSI |
+| `hormuz.now` | strong | provider | reassignable | yes | Vessel | hormuz.now's own vessel id. Links reports within hormuz.now only. **Not one per vessel and not stable** (evidence 7): hormuz.now sometimes lists one vessel under two ids at once, and gives a vessel a new id over time. So a vessel can hold several of these at once, and the MMSI, not this id, carries a vessel across them. Used on its own only when a vessel has no valid MMSI |
 | `adsb.lol` | weak | provider | reassignable | no | Aircraft | adsb.lol addresses starting `~` (non-ICAO, such as TIS-B): never linked to an aircraft |
 
 ### Source trust (principle 5)
@@ -194,20 +198,23 @@ Schemes that only mean something inside one feed:
 | adsb.lol | **not** `registration` | adsb.lol looks the registration up in its own database; it proposes |
 | Offline reference data (12.x) | `imo`, `msn`, `registration` | Register data. Until it is loaded, every IMO and registration only proposes |
 
-### The real case: one MMSI, two vessels
+### The real case: MMSIs with more than one hormuz.now vessel
 
-On 2026-11-19 hormuz.now showed 4 MMSIs each used by two different hormuz.now
-vessels at once: different hormuz.now ids, positions too far apart for one hull.
-Today they merge into one asset, because the lake and the map key on MMSI, so one
-"vessel" jumps between two places and the detections job sees impossible speeds.
-Under these rules:
+12 MMSIs were seen with more than one hormuz.now vessel id (evidence 3). Comparing
+ids reporting in the same 10 minutes (evidence 7) shows three different things, and
+the rules handle each without anything special:
 
-- each hormuz.now id is its own vessel, linked by the `hormuz.now` key;
-- the MMSI is exclusive, and two vessels claim it within 10 minutes at more than 50
-  knots apart, so both MMSI rows are `contested` and a conflict goes to review with
-  both tracks as evidence;
-- while it lasts, an aisstream report with only that MMSI links to neither vessel and
-  proposes; the analyst's decision ends it.
+| What | MMSIs | Seen | Under these rules |
+|---|---|---|---|
+| Two ships on one MMSI | `470902000`, `470013000` | 20 and 41 windows together, about 110 km apart: 660 km/h for one ship | Implausible within the window, so both MMSI rows are `contested`, a conflict goes to review with both tracks, and an MMSI-only report (aisstream) links to neither until an analyst decides |
+| One ship listed twice by hormuz.now | `470922000`, `457669000`, `620999368`, `470684000` | together, 0 to 1 km apart | Plausible, so the MMSI links both hormuz.now ids to one vessel |
+| One ship renumbered by hormuz.now | the other six | never together | The MMSI carries the vessel from the old id to the new one |
+
+Today all twelve merge into one asset per MMSI. For the ten that is right; for the
+two shared MMSIs one "vessel" jumps 110 km and back.
+
+The thresholds are settled for vessels: 50 knots is about 15 km in 10 minutes, far
+from both the duplicates (0 to 1 km) and the sharing (110 km).
 
 ### The event feeds
 
@@ -230,16 +237,19 @@ by (`id_scheme`, `asset_id`) at `event_time`.
 ### The detections job
 
 `ssb/04_detections.sql` runs on the live stream, before resolution, so it keys on
-claims, not entities. Two changes follow from these rules:
+claims, not entities, and keeps the MMSI as its key (evidence 7: for ten of the
+twelve MMSIs with several hormuz.now ids, the MMSI is the right key and the
+hormuz.now id is not). Two changes:
 
 - key on (`id_scheme`, `asset_id`), not `asset_id` alone, so a provider id can never
   collide with an MMSI;
-- key on the most specific claim a report carries: for hormuz.now, its own vessel id
-  ahead of the MMSI. That alone stops the false speed-jump alerts from shared MMSIs.
+- the speed-jump check compares consecutive reports only when they carry the same
+  provider id, so two ships on one MMSI don't raise impossible-speed alerts. The gap
+  and loitering checks stay on the MMSI.
 
+The lasting fix is resolution: once an MMSI is `contested`, detections on it say so.
 An alert becomes an Alert entity through an action by a machine actor (O7), which
-resolves its claim to an entity at the alert's time; an alert on a contested
-identifier says so.
+resolves its claim to an entity at the alert's time.
 
 ### Evidence from the lake (2026-11-20)
 
@@ -255,9 +265,7 @@ about 16 M vessel reports since the lake rework:
    (`REVO-62%` to `REVO-82%`). A few look like real renames or shared MMSIs
    (`368115220`: WESTPORT41M, TRU LUV, PRICELESS).
 3. **MMSIs with more than one hormuz.now vessel:** 12 (4 seen on 2026-11-19), 11 with
-   two vessels and `620999368` with three; mostly UAE (`470…`). Counted over all
-   time, so it doesn't yet separate two ships at once from hormuz.now renumbering a
-   vessel: query 7 does.
+   two vessels and `620999368` with three; mostly UAE (`470…`).
 4. **IMOs with several MMSIs:** 42. 15 fail the check digit (`1073741823`, which is
    AIS's 2³⁰−1 "not available", with 62 MMSIs; `123456789`; `1`; `14`; ...).
    `1234567` passes it and is junk. The other 26 look like reflags (Marshall Islands
@@ -268,15 +276,19 @@ about 16 M vessel reports since the lake rework:
    these reach the lake as vessels; hormuz.now's checks for 9 digits.
 6. **ICAO addresses with several registrations:** none. Weak evidence: adsb.lol looks
    the registration up from the address in its own database, so they can't disagree.
+7. **The 12 MMSIs of 3, in the same 10 minutes:** `470902000` and `470013000` together 20 and
+   41 times, about 110 km apart (two ships); `470922000`, `457669000`, `620999368`
+   and `470684000` together 0 to 1 km apart (one ship listed twice); the other six
+   never together (renumbered). See the real case above.
 
 Rules changed by this: the IMO junk list and AIS's "not available" value; the MMSI
 check (handheld radios, MID-and-zeros placeholders, invalid 1, 9 and 7xx ranges);
-the name check; fishing gear is not a vessel.
+the name check; fishing gear is not a vessel; the hormuz.now id is neither one per
+vessel nor stable; the detections change; the vessel window and limit confirmed.
 
 ### The queries
 
-Run in Hue (`iceberg.horus_dev.events_iceberg`). 1 to 6 were run 2026-11-20; 7 is
-next.
+Run in Hue (`iceberg.horus_dev.events_iceberg`), all on 2026-11-20.
 
 ```sql
 -- 1. How often a vessel report carries an IMO, per source.
