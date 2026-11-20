@@ -266,6 +266,32 @@ views per asset type come later from the Helios semantic model (O0b).
 | 16.6 | Table maintenance job on a schedule: compact small files applying the sort, expire snapshots, remove orphan files | File count stays flat day to day | 2 | Doing: `maintain-lake --yes` ran on the platform (2026-11-19); the daily Workbench Job could not be created (C14), so it runs by hand until then. Done when the file count stays flat day to day |
 | 16.7 | Checks: the Flink and Trino tile formulas agree; a bounding-box query skips most files | Both shown in a test | 1 | Done (2026-11-19): Flink and Trino formulas agree; a compacted day is one run sorted by tile and a Hormuz bbox overlaps 2 of 38 row groups (local Trino); compaction ran on the platform |
 
+## 17. Raw capture (bronze layer; do before the ontology)
+
+Today NiFi turns each upstream response into envelopes before Kafka, and the
+upstream response is discarded; `payload` holds the envelope, not the source.
+So a bug in a NiFi script loses data for good (the NWS flow wrote empty
+properties for weeks: C2). Keep every response as received for a while, so the
+silver table can be rebuilt with fixed scripts, and so agent findings can cite
+their raw sources. Agreed 2026-11-20.
+
+The branch: every flow fetches with InvokeHTTP (its **Response** relationship)
+or ConnectWebSocket (**binary message**; aisstream). A NiFi relationship can feed
+more than one connection, and each gets its own copy of the FlowFile, so Response
+connects to both the transform script and a second PublishKafka. InvokeHTTP's
+**Original** relationship is the empty trigger FlowFile, not the response, so it
+isn't the branch.
+
+| ID | Item | Done when | Est | Status |
+|---|---|---|---|---|
+| 17.1 | Measure first: response sizes and rates per flow for a day (InvokeHTTP's `fileSize` in NiFi's provenance, or a counter in each flow). OpenSky's all-states, NWS alerts with their polygons and FIRMS's CSV can each be several MB, and hormuz.now sends a whole snapshot every 30 s, unchanged much of the time | Sizes and daily volume per flow in LAKE-SCHEMA.md | 1 | Todo |
+| 17.2 | The raw topic, created by the provisioner per instance: `horus.<instance>.raw`, 7 days retention, `max.message.bytes` above the largest compressed response from 17.1 (Kafka's default is 1 MB); its Ranger Kafka policy printed like the events topic's | `create` makes it; the policy is in INSTALL.md step 7 | 2 | Todo |
+| 17.3 | Each flow publishes the response as received: a second PublishKafka on the Response (or binary message) relationship, zstd compression, `max.request.size` to match, NiFi attributes as Kafka headers (flow, source URL, HTTP status, content type, received time). Ships as an update to the 8 flow definitions; already-imported flows need their process group replaced (INSTALL.md step 6) | Every flow writes to both topics; a failed raw publish never blocks the events path | 3 | Todo |
+| 17.4 | The bronze table `raw_responses` (Iceberg v2, zstd, partitioned by day and flow): flow, source URL, HTTP status, content type, received time, body, body bytes and SHA-256. Written by a second Flink job from the raw topic. Identical consecutive bodies from the same flow (an unchanged hormuz.now snapshot) are stored once, keyed on the SHA-256 | Rows for every flow in the demo environment | 3 | Todo |
+| 17.5 | Retention: `maintain-lake` deletes `raw_responses` days older than `RAW_RETENTION_DAYS` (default 90; bronze is for recovery and provenance, not history) and compacts it like `events` | A day older than the setting is gone after the nightly run | 1 | Todo |
+| 17.6 | `horus.py rebuild-from-raw --flow <flow> --from <day> --to <day>`: runs the flow's current NiFi script over its raw rows (the nifi/test harness already runs the scripts outside NiFi), then replaces that flow's rows in `events` for those days, with `obs_hash` dedupe so a re-run is safe. Dry run by default, like `migrate-lake` | A deliberately broken script's days are rebuilt correctly after the fix, in a test | 4 | Todo |
+| 17.7 | Access: bronze is source data with no marking columns, so its Ranger policies are admin and service users only; agents and the UI read silver and the ontology, never bronze, except to cite a source record by id | Policies in INSTALL.md step 7 | 1 | Todo |
+
 ## Carried over
 
 | ID | Item | Status |
