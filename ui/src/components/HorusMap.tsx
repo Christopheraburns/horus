@@ -271,45 +271,9 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
       createFlame(map, 'fire-flame');
       createDot(map, 'dot-cctv', cameraColor, 10);
 
-      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','sigint-news','conflict-zones', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'malware-nodes', 'network-mesh', 'timetravel'];
+      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','sigint-news', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'malware-nodes', 'network-mesh', 'timetravel'];
       sources.forEach(s => map.addSource(s, { type: 'geojson', data: EMPTY_FC }));
 
-      // Warning icon generator (parameterized — eliminates 3x copy-paste)
-      const createWarningIcon = (id: string, color: string) => {
-        const s = 20;
-        const c = document.createElement('canvas');
-        c.width = s; c.height = s;
-        const ctx = c.getContext('2d')!;
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.moveTo(s/2, 1);
-        ctx.lineTo(s - 1, s - 1);
-        ctx.lineTo(1, s - 1);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = '#000';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('!', s/2, s - 4);
-        map.addImage(id, { width: s, height: s, data: new Uint8Array(ctx.getImageData(0, 0, s, s).data) });
-      };
-      createWarningIcon('warn-icon', '#D32F2F');
-      createWarningIcon('warn-orange', '#E65100');
-      createWarningIcon('warn-yellow', '#F9A825');
-
-      map.addLayer({ id: 'conflict-icons', type: 'symbol', source: 'conflict-zones', layout: {
-        'icon-image': ['match', ['get','severity'], 'war','warn-icon', 'high','warn-orange', 'warn-yellow'],
-        'icon-size': ['interpolate',['linear'],['zoom'], 1,0.6, 4,0.8, 8,1],
-        'icon-allow-overlap': true,
-        'text-field': ['get','label'],
-        'text-size': ['interpolate',['linear'],['zoom'], 1,7, 4,9, 8,11],
-        'text-font': ['Noto Sans Regular'],
-        'text-offset': [0, 1.4],
-        'text-allow-overlap': false,
-      }, paint: {
-        'text-color': ['match', ['get','severity'], 'war','#D32F2F', 'high','#E65100', '#F9A825'],
-        'text-halo-color': '#000', 'text-halo-width': 1.5, 'text-opacity': 0.9,
-      }});
 
 
       // Day/Night
@@ -806,25 +770,8 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
       </div>`);
     });
 
-    // ── Global Event / Conflict Markers ──
-    map.on('click', 'conflict-icons', e => {
-      if (!e.features?.length) return;
-      const p = e.features[0].properties as any;
-      const coords = (e.features[0].geometry as any).coordinates;
-      const color = p.severity === 'war' ? '#FF1744' : p.severity === 'high' ? '#FF9500' : '#FFD500';
-      popup(coords, `<div style="${pStyle}border:1px solid ${color}40;">
-        <div style="color:${color};font-size:12px;font-weight:700;margin-bottom:6px;">⚠️ ${htmlEsc(p.label || 'WARNING EVENT')}</div>
-        <div style="font-size:10px;color:#E8E6E0;margin-bottom:8px;line-height:1.4;">${htmlEsc(p.description || 'Global event detected at this location.')}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:9px;margin-bottom:8px;">
-          <div><span style="color:#5C5A54;">SEVERITY</span><br/><span style="color:${color};">${(p.severity||'unknown').toUpperCase()}</span></div>
-          <div><span style="color:#5C5A54;">COORDS</span><br/><span style="color:#E8E6E0;">${coords[1].toFixed(3)}°, ${coords[0].toFixed(3)}°</span></div>
-        </div>
-      </div>`);
-    });
-
-
     // ── Generic hover for clickables ──
-    ['conflict-icons','cctv-dots','eq-circles','sat-dots','fires-heat','gdelt-dots','weather-dots','infra-dots','maritime-dots','choke-dots','news-dots','sigint-news-dots','balloon-dots','rad-dots','ship-dots','malware-dots'].forEach(layer => {
+    ['cctv-dots','eq-circles','sat-dots','fires-heat','gdelt-dots','weather-dots','infra-dots','maritime-dots','choke-dots','news-dots','sigint-news-dots','balloon-dots','rad-dots','ship-dots','malware-dots'].forEach(layer => {
       map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
     });
@@ -1205,31 +1152,6 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
       : []);
   }, [mapReady, data.news, activeLayers.news_intel, setGeo]);
 
-  useEffect(() => {
-    if (!mapReady) return;
-    // 🔴 CONFLICT ZONES - center-point warning markers 🔴
-    const CONFLICT_ZONES = [
-      { label: 'UKRAINE WAR', severity: 'war', lat: 48.5, lng: 31.2, description: 'Live reporting: Ongoing Russian invasion of Ukraine and active frontlines.', sourceUrl: 'https://liveuamap.com/' },
-      { label: 'GAZA CONFLICT', severity: 'war', lat: 31.35, lng: 34.35, description: 'Live reporting: Active military operations and humanitarian crisis in Gaza.', sourceUrl: 'https://israelpalestine.liveuamap.com/' },
-      { label: 'LEBANON BORDER', severity: 'high', lat: 33.377, lng: 35.483, description: 'Live reporting: An airstrike targeted the city of Nabatieh.', sourceUrl: 'https://lebanon.liveuamap.com/en/2026/6-june-11-an-airstrike-targeted-the-city-of-nabatieh' },
-      { label: 'SUDAN CIVIL WAR', severity: 'war', lat: 15.0, lng: 30.0, description: 'Live reporting: Armed conflict between SAF and RSF factions across Sudan.', sourceUrl: 'https://sudan.liveuamap.com/' },
-      { label: 'MYANMAR CONFLICT', severity: 'war', lat: 19.5, lng: 96.5, description: 'Live reporting: Internal conflict and military junta opposition operations.', sourceUrl: 'https://myanmar.liveuamap.com/' },
-      { label: 'DRC EASTERN CONFLICT', severity: 'war', lat: -1.0, lng: 28.5, description: 'M23 rebel offensive and regional instability.' },
-      { label: 'YEMEN WAR', severity: 'war', lat: 15.5, lng: 48.0, description: 'Houthi militant operations and Red Sea maritime threats.', sourceUrl: 'https://yemen.liveuamap.com/' },
-      { label: 'SYRIA', severity: 'high', lat: 35.0, lng: 38.5, description: 'Live reporting: Ongoing civil war and localized insurgencies.', sourceUrl: 'https://syria.liveuamap.com/' },
-      { label: 'TAIWAN STRAIT', severity: 'elevated', lat: 24.0, lng: 119.5, description: 'Elevated military drills and regional tension.' },
-      { label: 'KOREAN DMZ', severity: 'elevated', lat: 38.3, lng: 127.0, description: 'Ongoing cross-border tension and military posturing.' },
-      { label: 'SAHEL INSTABILITY', severity: 'high', lat: 14.0, lng: 5.0, description: 'Insurgencies and military coups across the Sahel region.' },
-      { label: 'SOMALIA', severity: 'high', lat: 5.0, lng: 46.0, description: 'Al-Shabaab insurgency and counter-terrorism operations.' },
-      { label: 'RED SEA THREAT', severity: 'high', lat: 16.0, lng: 40.0, description: 'Houthi anti-ship missile and drone attacks on maritime traffic.', sourceUrl: 'https://yemen.liveuamap.com/' },
-    ];
-    const conflictFeatures = CONFLICT_ZONES.map(z => ({
-      type: 'Feature' as const,
-      geometry: { type: 'Point' as const, coordinates: [z.lng, z.lat] },
-      properties: { label: z.label, severity: z.severity, description: z.description, sourceUrl: z.sourceUrl },
-    }));
-    setGeo('conflict-zones', conflictFeatures);
-  }, [mapReady, setGeo]);
 
 
   // Visibility
@@ -1257,7 +1179,6 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
     setVis(['ship-dots','ship-label'], activeLayers.vessels);
     setVis(['news-glow','news-dots','news-label'], activeLayers.live_news);
     setVis(['sigint-news-glow','sigint-news-dots','sigint-news-label'], activeLayers.news_intel);
-    setVis(['conflict-icons'], activeLayers.conflict_zones !== false);
 
     setVis(['balloon-dots','balloon-label'], activeLayers.balloons);
     setVis(['rad-glow','rad-dots','rad-label'], activeLayers.radiation);
