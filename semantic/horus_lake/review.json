@@ -1,0 +1,912 @@
+{
+ "run_id": "20261120T213130Z",
+ "datasets": {
+  "horus_dev_views.vessel_positions": {
+   "decision": "edit",
+   "overrides": {
+    "description": "Vessel position reports, one row per report: aisstream.io AIS position messages and hormuz.now snapshots (Strait of Hormuz), with speed, course, heading and navigational status."
+   },
+   "note": "Two sources, not only AIS receivers."
+  },
+  "horus_dev_views.vessel_static_reports": {
+   "decision": "edit",
+   "overrides": {
+    "description": "What a vessel says about itself in AIS static messages (name, IMO, call sign, ship type, dimensions, destination), one row per message. The evidence for vessel identity: claims as transmitted, not register values (docs/IDENTITY.md)."
+   },
+   "note": "It is identity evidence, not positions."
+  },
+  "horus_dev_views.aircraft_positions": {
+   "decision": "accept"
+  },
+  "horus_dev_views.earthquakes": {
+   "decision": "accept"
+  },
+  "horus_dev_views.weather_events": {
+   "decision": "accept"
+  },
+  "horus_dev_views.fire_detections": {
+   "decision": "accept"
+  }
+ },
+ "fields": {
+  "horus_dev_views.vessel_positions.event_id": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute",
+    "description": "The source's id for what it reported (provider:originalId). Repeats across reports of the same thing; with event_time it identifies a report, and obs_hash is that pair's key."
+   },
+   "note": "Not unique per row: obs_hash is."
+  },
+  "horus_dev_views.vessel_positions.obs_hash": {
+   "decision": "edit",
+   "overrides": {
+    "description": "The observation's key: SHA-256 of event_id and the event time in milliseconds. One row per value (the lake's dedupe key).",
+    "role": "identifier"
+   },
+   "note": "What it is the hash of."
+  },
+  "horus_dev_views.vessel_positions.lat": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute",
+    "description": "Latitude in decimal degrees (WGS84)."
+   },
+   "note": "Coordinates are never summed or averaged as measures."
+  },
+  "horus_dev_views.vessel_positions.lon": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute",
+    "description": "Longitude in decimal degrees (WGS84)."
+   },
+   "note": "Coordinates are never summed or averaged as measures."
+  },
+  "horus_dev_views.vessel_positions.tile_z8": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_positions.event_time": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_positions.captured_at": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_positions.source_provider": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_positions.classification": {
+   "decision": "edit",
+   "overrides": {
+    "description": "Security marking (burndown section 13); UNCLASSIFIED today."
+   },
+   "note": "A security marking, not a category."
+  },
+  "horus_dev_views.vessel_positions.releasability": {
+   "decision": "edit",
+   "overrides": {
+    "description": "Who the record may be shared with (burndown section 13); not yet set."
+   },
+   "note": "A security marking."
+  },
+  "horus_dev_views.vessel_positions.mmsi": {
+   "decision": "edit",
+   "overrides": {
+    "role": "dimension",
+    "description": "The MMSI the transmitter reported; null when the report's id isn't an MMSI. A claim as the source sent it, unchecked (docs/IDENTITY.md)."
+   },
+   "note": "No table to refer to; a grouping key, and a claim."
+  },
+  "horus_dev_views.vessel_positions.asset_id": {
+   "decision": "edit",
+   "overrides": {
+    "role": "dimension",
+    "description": "The id the source reported for the vessel: an MMSI, or hormuz.now's own id (hormuz.now:<id>) when it has no valid MMSI; see id_scheme. A claim as the source sent it, unchecked (docs/IDENTITY.md)."
+   },
+   "note": "There is no vessel dimension; it is the reported id."
+  },
+  "horus_dev_views.vessel_positions.id_scheme": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_positions.provider_vessel_id": {
+   "decision": "edit",
+   "overrides": {
+    "description": "hormuz.now's own vessel id (null for aisstream.io rows). Not one per vessel and not stable over time (docs/IDENTITY.md, evidence 7)."
+   },
+   "note": "Why it is mostly empty."
+  },
+  "horus_dev_views.vessel_positions.vessel_name": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_positions.vessel_type": {
+   "decision": "edit",
+   "overrides": {
+    "description": "Vessel category (cargo, tanker, ...); filled by hormuz.now only (null for aisstream.io positions: see vessel_static_reports)."
+   },
+   "note": "Filled by hormuz.now only."
+  },
+  "horus_dev_views.vessel_positions.speed_mps": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_positions.speed_kn": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_positions.course_deg": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_positions.heading_deg": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_positions.nav_status": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_positions.destination": {
+   "decision": "edit",
+   "overrides": {
+    "description": "Reported destination; filled by hormuz.now only (null for aisstream.io positions: see vessel_static_reports)."
+   },
+   "note": "Filled by hormuz.now only."
+  },
+  "horus_dev_views.vessel_positions.flag": {
+   "decision": "edit",
+   "overrides": {
+    "description": "Flag state; filled by hormuz.now only (null for aisstream.io positions: see vessel_static_reports)."
+   },
+   "note": "Filled by hormuz.now only."
+  },
+  "horus_dev_views.vessel_static_reports.event_id": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute",
+    "description": "The source's id for what it reported (provider:originalId). Repeats across reports of the same thing; with event_time it identifies a report, and obs_hash is that pair's key."
+   },
+   "note": "Not unique per row: obs_hash is."
+  },
+  "horus_dev_views.vessel_static_reports.obs_hash": {
+   "decision": "edit",
+   "overrides": {
+    "description": "The observation's key: SHA-256 of event_id and the event time in milliseconds. One row per value (the lake's dedupe key).",
+    "role": "identifier"
+   },
+   "note": "What it is the hash of."
+  },
+  "horus_dev_views.vessel_static_reports.lat": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute",
+    "description": "Latitude in decimal degrees (WGS84)."
+   },
+   "note": "Coordinates are never summed or averaged as measures."
+  },
+  "horus_dev_views.vessel_static_reports.lon": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute",
+    "description": "Longitude in decimal degrees (WGS84)."
+   },
+   "note": "Coordinates are never summed or averaged as measures."
+  },
+  "horus_dev_views.vessel_static_reports.tile_z8": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_static_reports.event_time": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_static_reports.captured_at": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_static_reports.source_provider": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_static_reports.classification": {
+   "decision": "edit",
+   "overrides": {
+    "description": "Security marking (burndown section 13); UNCLASSIFIED today."
+   },
+   "note": "A security marking, not a category."
+  },
+  "horus_dev_views.vessel_static_reports.releasability": {
+   "decision": "edit",
+   "overrides": {
+    "description": "Who the record may be shared with (burndown section 13); not yet set."
+   },
+   "note": "A security marking."
+  },
+  "horus_dev_views.vessel_static_reports.mmsi": {
+   "decision": "edit",
+   "overrides": {
+    "role": "dimension",
+    "description": "The MMSI the transmitter reported. A claim as the source sent it, unchecked (docs/IDENTITY.md)."
+   },
+   "note": "Not unique per row; a claim."
+  },
+  "horus_dev_views.vessel_static_reports.vessel_name": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_static_reports.vessel_type": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_static_reports.imo": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute",
+    "description": "The IMO number as typed into the transponder: missing on 39% of reports and sometimes junk (AIS's 1073741823 means not available). A claim as the source sent it, unchecked (docs/IDENTITY.md)."
+   },
+   "note": "Crew-typed, often missing or junk."
+  },
+  "horus_dev_views.vessel_static_reports.call_sign": {
+   "decision": "edit",
+   "overrides": {
+    "description": "The radio call sign the vessel reported; changes with the flag. A claim as the source sent it, unchecked (docs/IDENTITY.md)."
+   },
+   "note": "A claim."
+  },
+  "horus_dev_views.vessel_static_reports.ais_ship_type": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_static_reports.destination": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_static_reports.length_m": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_static_reports.width_m": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_static_reports.draught_m": {
+   "decision": "accept"
+  },
+  "horus_dev_views.aircraft_positions.event_id": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute",
+    "description": "The source's id for what it reported (provider:originalId). Repeats across reports of the same thing; with event_time it identifies a report, and obs_hash is that pair's key."
+   },
+   "note": "Not unique per row: obs_hash is."
+  },
+  "horus_dev_views.aircraft_positions.obs_hash": {
+   "decision": "edit",
+   "overrides": {
+    "description": "The observation's key: SHA-256 of event_id and the event time in milliseconds. One row per value (the lake's dedupe key).",
+    "role": "identifier"
+   },
+   "note": "What it is the hash of."
+  },
+  "horus_dev_views.aircraft_positions.lat": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute",
+    "description": "Latitude in decimal degrees (WGS84)."
+   },
+   "note": "Coordinates are never summed or averaged as measures."
+  },
+  "horus_dev_views.aircraft_positions.lon": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute",
+    "description": "Longitude in decimal degrees (WGS84)."
+   },
+   "note": "Coordinates are never summed or averaged as measures."
+  },
+  "horus_dev_views.aircraft_positions.tile_z8": {
+   "decision": "accept"
+  },
+  "horus_dev_views.aircraft_positions.event_time": {
+   "decision": "accept"
+  },
+  "horus_dev_views.aircraft_positions.captured_at": {
+   "decision": "accept"
+  },
+  "horus_dev_views.aircraft_positions.source_provider": {
+   "decision": "accept"
+  },
+  "horus_dev_views.aircraft_positions.classification": {
+   "decision": "edit",
+   "overrides": {
+    "description": "Security marking (burndown section 13); UNCLASSIFIED today."
+   },
+   "note": "A security marking, not a category."
+  },
+  "horus_dev_views.aircraft_positions.releasability": {
+   "decision": "edit",
+   "overrides": {
+    "description": "Who the record may be shared with (burndown section 13); not yet set."
+   },
+   "note": "A security marking."
+  },
+  "horus_dev_views.aircraft_positions.icao24": {
+   "decision": "edit",
+   "overrides": {
+    "role": "dimension",
+    "description": "The ICAO 24-bit transponder address (6 hex digits); null for non-ICAO ids. Assigned with the registration and reissued over time. A claim as the source sent it, unchecked (docs/IDENTITY.md)."
+   },
+   "note": "Grouping key; reassignable."
+  },
+  "horus_dev_views.aircraft_positions.asset_id": {
+   "decision": "edit",
+   "overrides": {
+    "role": "dimension",
+    "description": "The id the source reported for the aircraft: an ICAO 24-bit address, or adsb.lol's own (~ prefix) for non-ICAO transponders; see id_scheme. A claim as the source sent it, unchecked (docs/IDENTITY.md)."
+   },
+   "note": "The reported id, not an internal one."
+  },
+  "horus_dev_views.aircraft_positions.id_scheme": {
+   "decision": "accept"
+  },
+  "horus_dev_views.aircraft_positions.callsign": {
+   "decision": "accept"
+  },
+  "horus_dev_views.aircraft_positions.registration": {
+   "decision": "accept"
+  },
+  "horus_dev_views.aircraft_positions.aircraft_model": {
+   "decision": "accept"
+  },
+  "horus_dev_views.aircraft_positions.flight_category": {
+   "decision": "edit",
+   "overrides": {
+    "description": "Horus's flight category: commercial, private, jet or military (from type, flags and callsign)."
+   },
+   "note": "The actual values."
+  },
+  "horus_dev_views.aircraft_positions.airline_code": {
+   "decision": "accept"
+  },
+  "horus_dev_views.aircraft_positions.squawk": {
+   "decision": "accept"
+  },
+  "horus_dev_views.aircraft_positions.alt_m": {
+   "decision": "accept"
+  },
+  "horus_dev_views.aircraft_positions.speed_mps": {
+   "decision": "accept"
+  },
+  "horus_dev_views.aircraft_positions.speed_kn": {
+   "decision": "accept"
+  },
+  "horus_dev_views.aircraft_positions.course_deg": {
+   "decision": "edit",
+   "overrides": {
+    "description": "Track over ground, degrees clockwise from true north (aircraft feeds report no heading)."
+   },
+   "note": "Track, not heading."
+  },
+  "horus_dev_views.aircraft_positions.on_ground": {
+   "decision": "accept"
+  },
+  "horus_dev_views.earthquakes.event_id": {
+   "decision": "edit",
+   "overrides": {
+    "description": "The quake's id (USGS:<id>); one quake per value. obs_hash identifies the report."
+   },
+   "note": "The quake's own id; obs_hash is the row's."
+  },
+  "horus_dev_views.earthquakes.obs_hash": {
+   "decision": "edit",
+   "overrides": {
+    "description": "The observation's key: SHA-256 of event_id and the event time in milliseconds. One row per value (the lake's dedupe key).",
+    "role": "identifier"
+   },
+   "note": "What it is the hash of."
+  },
+  "horus_dev_views.earthquakes.lat": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute",
+    "description": "Latitude in decimal degrees (WGS84)."
+   },
+   "note": "Coordinates are never summed or averaged as measures."
+  },
+  "horus_dev_views.earthquakes.lon": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute",
+    "description": "Longitude in decimal degrees (WGS84)."
+   },
+   "note": "Coordinates are never summed or averaged as measures."
+  },
+  "horus_dev_views.earthquakes.tile_z8": {
+   "decision": "accept"
+  },
+  "horus_dev_views.earthquakes.event_time": {
+   "decision": "accept"
+  },
+  "horus_dev_views.earthquakes.captured_at": {
+   "decision": "accept"
+  },
+  "horus_dev_views.earthquakes.source_provider": {
+   "decision": "accept"
+  },
+  "horus_dev_views.earthquakes.classification": {
+   "decision": "edit",
+   "overrides": {
+    "description": "Security marking (burndown section 13); UNCLASSIFIED today."
+   },
+   "note": "A security marking, not a category."
+  },
+  "horus_dev_views.earthquakes.releasability": {
+   "decision": "edit",
+   "overrides": {
+    "description": "Who the record may be shared with (burndown section 13); not yet set."
+   },
+   "note": "A security marking."
+  },
+  "horus_dev_views.earthquakes.place": {
+   "decision": "accept"
+  },
+  "horus_dev_views.earthquakes.quake_type": {
+   "decision": "accept"
+  },
+  "horus_dev_views.earthquakes.magnitude": {
+   "decision": "edit",
+   "overrides": {
+    "description": "Magnitude as USGS reports it; its magnitude type (Mw, ML, mb, ...) varies by event."
+   },
+   "note": "Not all Richter."
+  },
+  "horus_dev_views.earthquakes.depth_km": {
+   "decision": "accept"
+  },
+  "horus_dev_views.earthquakes.felt_reports": {
+   "decision": "accept"
+  },
+  "horus_dev_views.earthquakes.tsunami_flag": {
+   "decision": "accept"
+  },
+  "horus_dev_views.earthquakes.source_url": {
+   "decision": "accept"
+  },
+  "horus_dev_views.weather_events.event_id": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute",
+    "description": "The source's id for what it reported (provider:originalId). Repeats across reports of the same thing; with event_time it identifies a report, and obs_hash is that pair's key."
+   },
+   "note": "Not unique per row: obs_hash is."
+  },
+  "horus_dev_views.weather_events.obs_hash": {
+   "decision": "edit",
+   "overrides": {
+    "description": "The observation's key: SHA-256 of event_id and the event time in milliseconds. One row per value (the lake's dedupe key).",
+    "role": "identifier"
+   },
+   "note": "What it is the hash of."
+  },
+  "horus_dev_views.weather_events.lat": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute",
+    "description": "Latitude in decimal degrees (WGS84)."
+   },
+   "note": "Coordinates are never summed or averaged as measures."
+  },
+  "horus_dev_views.weather_events.lon": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute",
+    "description": "Longitude in decimal degrees (WGS84)."
+   },
+   "note": "Coordinates are never summed or averaged as measures."
+  },
+  "horus_dev_views.weather_events.tile_z8": {
+   "decision": "accept"
+  },
+  "horus_dev_views.weather_events.event_time": {
+   "decision": "accept"
+  },
+  "horus_dev_views.weather_events.captured_at": {
+   "decision": "accept"
+  },
+  "horus_dev_views.weather_events.source_provider": {
+   "decision": "accept"
+  },
+  "horus_dev_views.weather_events.classification": {
+   "decision": "edit",
+   "overrides": {
+    "description": "Security marking (burndown section 13); UNCLASSIFIED today."
+   },
+   "note": "A security marking, not a category."
+  },
+  "horus_dev_views.weather_events.releasability": {
+   "decision": "edit",
+   "overrides": {
+    "description": "Who the record may be shared with (burndown section 13); not yet set."
+   },
+   "note": "A security marking."
+  },
+  "horus_dev_views.weather_events.title": {
+   "decision": "accept"
+  },
+  "horus_dev_views.weather_events.weather_category": {
+   "decision": "accept"
+  },
+  "horus_dev_views.weather_events.weather_type": {
+   "decision": "accept"
+  },
+  "horus_dev_views.weather_events.severity": {
+   "decision": "accept"
+  },
+  "horus_dev_views.weather_events.area": {
+   "decision": "accept"
+  },
+  "horus_dev_views.weather_events.expires": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute",
+    "description": "When the alert expires, as the source's ISO-8601 text (NWS only)."
+   },
+   "note": "Text, not a timestamp."
+  },
+  "horus_dev_views.weather_events.geom_wkt": {
+   "decision": "accept"
+  },
+  "horus_dev_views.weather_events.bbox_min_lon": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute"
+   },
+   "note": "Coordinates, not a grouping."
+  },
+  "horus_dev_views.weather_events.bbox_min_lat": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute"
+   },
+   "note": "Coordinates, not a grouping."
+  },
+  "horus_dev_views.weather_events.bbox_max_lon": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute"
+   },
+   "note": "Coordinates, not a grouping."
+  },
+  "horus_dev_views.weather_events.bbox_max_lat": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute"
+   },
+   "note": "Coordinates, not a grouping."
+  },
+  "horus_dev_views.fire_detections.event_id": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute",
+    "description": "The source's id for what it reported (provider:originalId). Repeats across reports of the same thing; with event_time it identifies a report, and obs_hash is that pair's key."
+   },
+   "note": "Not unique per row: obs_hash is."
+  },
+  "horus_dev_views.fire_detections.obs_hash": {
+   "decision": "edit",
+   "overrides": {
+    "description": "The observation's key: SHA-256 of event_id and the event time in milliseconds. One row per value (the lake's dedupe key).",
+    "role": "identifier"
+   },
+   "note": "What it is the hash of."
+  },
+  "horus_dev_views.fire_detections.lat": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute",
+    "description": "Latitude in decimal degrees (WGS84)."
+   },
+   "note": "Coordinates are never summed or averaged as measures."
+  },
+  "horus_dev_views.fire_detections.lon": {
+   "decision": "edit",
+   "overrides": {
+    "role": "attribute",
+    "description": "Longitude in decimal degrees (WGS84)."
+   },
+   "note": "Coordinates are never summed or averaged as measures."
+  },
+  "horus_dev_views.fire_detections.tile_z8": {
+   "decision": "accept"
+  },
+  "horus_dev_views.fire_detections.event_time": {
+   "decision": "accept"
+  },
+  "horus_dev_views.fire_detections.captured_at": {
+   "decision": "accept"
+  },
+  "horus_dev_views.fire_detections.source_provider": {
+   "decision": "accept"
+  },
+  "horus_dev_views.fire_detections.classification": {
+   "decision": "edit",
+   "overrides": {
+    "description": "Security marking (burndown section 13); UNCLASSIFIED today."
+   },
+   "note": "A security marking, not a category."
+  },
+  "horus_dev_views.fire_detections.releasability": {
+   "decision": "edit",
+   "overrides": {
+    "description": "Who the record may be shared with (burndown section 13); not yet set."
+   },
+   "note": "A security marking."
+  },
+  "horus_dev_views.fire_detections.fire_type": {
+   "decision": "accept"
+  },
+  "horus_dev_views.fire_detections.brightness_k": {
+   "decision": "accept"
+  },
+  "horus_dev_views.fire_detections.radiative_power_mw": {
+   "decision": "accept"
+  },
+  "horus_dev_views.fire_detections.confidence": {
+   "decision": "accept"
+  },
+  "horus_dev_views.fire_detections.satellite": {
+   "decision": "accept"
+  }
+ },
+ "relationships": {},
+ "metrics": {
+  "horus_dev_views.aircraft_positions::Average altitude": {
+   "decision": "accept"
+  },
+  "horus_dev_views.aircraft_positions::Maximum altitude": {
+   "decision": "accept"
+  },
+  "horus_dev_views.aircraft_positions::Average speed (m/s)": {
+   "decision": "reject",
+   "note": "Duplicates the knots metric."
+  },
+  "horus_dev_views.aircraft_positions::Average speed (knots)": {
+   "decision": "accept"
+  },
+  "horus_dev_views.aircraft_positions::Maximum speed (knots)": {
+   "decision": "accept"
+  },
+  "horus_dev_views.aircraft_positions::Position observations": {
+   "decision": "accept"
+  },
+  "horus_dev_views.earthquakes::Average magnitude": {
+   "decision": "accept"
+  },
+  "horus_dev_views.earthquakes::Maximum magnitude": {
+   "decision": "accept"
+  },
+  "horus_dev_views.earthquakes::Average depth (km)": {
+   "decision": "accept"
+  },
+  "horus_dev_views.earthquakes::Total felt reports": {
+   "decision": "accept"
+  },
+  "horus_dev_views.earthquakes::Earthquake events": {
+   "decision": "accept"
+  },
+  "horus_dev_views.fire_detections::Average brightness temperature": {
+   "decision": "accept"
+  },
+  "horus_dev_views.fire_detections::Maximum brightness temperature": {
+   "decision": "accept"
+  },
+  "horus_dev_views.fire_detections::Total radiative power": {
+   "decision": "accept"
+  },
+  "horus_dev_views.fire_detections::Average radiative power": {
+   "decision": "accept"
+  },
+  "horus_dev_views.fire_detections::Maximum radiative power": {
+   "decision": "accept"
+  },
+  "horus_dev_views.fire_detections::Fire detections": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_positions::Average speed (m/s)": {
+   "decision": "reject",
+   "note": "Duplicates the knots metric."
+  },
+  "horus_dev_views.vessel_positions::Average speed (knots)": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_positions::Maximum speed (knots)": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_positions::Position reports": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_static_reports::Average vessel length": {
+   "decision": "edit",
+   "overrides": {
+    "expression": "AVG(NULLIF(length_m, 0))"
+   },
+   "note": "AIS sends 0 for unknown; zeros would drag the average down."
+  },
+  "horus_dev_views.vessel_static_reports::Average vessel width": {
+   "decision": "edit",
+   "overrides": {
+    "expression": "AVG(NULLIF(width_m, 0))"
+   },
+   "note": "AIS sends 0 for unknown; zeros would drag the average down."
+  },
+  "horus_dev_views.vessel_static_reports::Average draught": {
+   "decision": "edit",
+   "overrides": {
+    "expression": "AVG(NULLIF(draught_m, 0))"
+   },
+   "note": "AIS sends 0 for unknown; zeros would drag the average down."
+  },
+  "horus_dev_views.vessel_static_reports::Maximum vessel length": {
+   "decision": "accept"
+  },
+  "horus_dev_views.vessel_static_reports::Vessel static reports": {
+   "decision": "accept"
+  }
+ },
+ "glossary_terms": {
+  "AIS ship type": {
+   "decision": "accept"
+  },
+  "Affected area": {
+   "decision": "accept"
+  },
+  "Altitude": {
+   "decision": "accept"
+  },
+  "Brightness temperature": {
+   "decision": "accept"
+  },
+  "Capture time": {
+   "decision": "reject",
+   "note": "Duplicates Captured at."
+  },
+  "Captured at": {
+   "decision": "accept"
+  },
+  "Classification": {
+   "decision": "edit",
+   "overrides": {
+    "definition": "The security marking on a record (burndown section 13), such as UNCLASSIFIED."
+   },
+   "note": "A security marking."
+  },
+  "Course": {
+   "decision": "reject",
+   "note": "Duplicates Course over ground."
+  },
+  "Course over ground": {
+   "decision": "accept"
+  },
+  "Data source provider": {
+   "decision": "reject",
+   "note": "Duplicates Source provider."
+  },
+  "Depth": {
+   "decision": "accept"
+  },
+  "Detection classification": {
+   "decision": "reject",
+   "note": "Duplicates Classification (a security marking)."
+  },
+  "Detection confidence": {
+   "decision": "accept"
+  },
+  "Detection time": {
+   "decision": "reject",
+   "note": "Duplicates Event time."
+  },
+  "Draught": {
+   "decision": "accept"
+  },
+  "Event time": {
+   "decision": "accept"
+  },
+  "Event type": {
+   "decision": "reject",
+   "note": "Too generic for one column (quake type)."
+  },
+  "Expiration time": {
+   "decision": "accept"
+  },
+  "Felt reports": {
+   "decision": "accept"
+  },
+  "Fire detection type": {
+   "decision": "reject",
+   "note": "A constant (satellite-detection), not a concept."
+  },
+  "Fire radiative power": {
+   "decision": "accept"
+  },
+  "Flag": {
+   "decision": "edit",
+   "overrides": {
+    "definition": "A vessel's flag state: the country it is registered in. Changes when the vessel is reflagged."
+   },
+   "note": "Changes over time."
+  },
+  "Flight category": {
+   "decision": "accept"
+  },
+  "Geospatial tile": {
+   "decision": "reject",
+   "note": "Duplicates Map tile."
+  },
+  "Ground speed": {
+   "decision": "reject",
+   "note": "Duplicates Speed."
+  },
+  "Ground speed (knots)": {
+   "decision": "reject",
+   "note": "Duplicates Speed."
+  },
+  "Heading": {
+   "decision": "accept"
+  },
+  "ID scheme": {
+   "decision": "edit",
+   "overrides": {
+    "definition": "What kind of identifier a report's asset_id is: mmsi, icao24, callsign, or a provider's own id (hormuz.now, adsb.lol)."
+   },
+   "note": "What it means here."
+  },
+  "Latitude": {
+   "decision": "accept"
+  },
+  "Longitude": {
+   "decision": "accept"
+  },
+  "MMSI": {
+   "decision": "edit",
+   "overrides": {
+    "definition": "Maritime Mobile Service Identity: the nine-digit number of a vessel's radio, sent in every AIS message. Reissued when a ship is reflagged or sold, and sometimes shared or spoofed, so it identifies a radio at a time, not a hull (the IMO number does)."
+   },
+   "note": "Not unique for life."
+  },
+  "Magnitude": {
+   "decision": "accept"
+  },
+  "Map tile": {
+   "decision": "edit",
+   "overrides": {
+    "definition": "The Web Mercator map tile at zoom 8 containing a point, as x * 256 + y; used to group and find nearby reports."
+   },
+   "note": "Precise."
+  },
+  "Navigation status": {
+   "decision": "accept"
+  },
+  "On ground": {
+   "decision": "accept"
+  },
+  "Place": {
+   "decision": "accept"
+  },
+  "Satellite": {
+   "decision": "accept"
+  },
+  "Severity": {
+   "decision": "accept"
+  },
+  "Source provider": {
+   "decision": "accept"
+  },
+  "Speed": {
+   "decision": "edit",
+   "overrides": {
+    "definition": "Speed over ground, in metres per second or knots."
+   },
+   "note": "Covers aircraft and vessels."
+  },
+  "Tsunami flag": {
+   "decision": "accept"
+  },
+  "Vessel length": {
+   "decision": "accept"
+  },
+  "Vessel type": {
+   "decision": "accept"
+  },
+  "Vessel width": {
+   "decision": "accept"
+  },
+  "Weather category": {
+   "decision": "accept"
+  },
+  "Weather type": {
+   "decision": "accept"
+  }
+ }
+}
