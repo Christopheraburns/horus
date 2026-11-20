@@ -129,15 +129,20 @@ Primary key `vesselId`. Title: the current name. Implements `Located`; `maxSpeed
 
 | Scheme | Strength | Scope | Validity | Exclusive | Value check | Notes |
 |---|---|---|---|---|---|---|
-| `imo` | strong | global | permanent | yes | 7 digits; digits 1 to 6 weighted 7, 6, 5, 4, 3, 2, and the sum's last digit is digit 7 | The hull's number for life |
-| `mmsi` | strong | global | reassignable | yes, window 10 minutes | 9 digits starting with a ship's maritime identification digits, 201 to 775. Not a ship: `00…` coast stations, `111…` SAR aircraft, `970`, `972`, `974` (SART, MOB, EPIRB devices), `98…` craft of a parent ship, `99…` aids to navigation. Junk: `000000000`, `111111111`, `123456789`, `999999999` and the like | Changes when a ship is reflagged or sold, is reissued later, and is often shared or spoofed |
+| `imo` | strong | global | permanent | yes | 7 digits; digits 1 to 6 weighted 7, 6, 5, 4, 3, 2, and the sum's last digit is digit 7. Junk even though some pass the check: `1234567`, `1111111`, `9999999`; and AIS's "not available", `1073741823` (2³⁰−1) | The hull's number for life. In AIS only static messages carry it (17% of aisstream reports, none from hormuz.now: evidence 1), so it is learned per vessel, never read off a position |
+| `mmsi` | strong | global | reassignable | yes, window 10 minutes | Exactly 9 digits starting with an assigned maritime identification digit, 201 to 775. Not a ship: `00…` coast stations, `111…` SAR aircraft, `970`, `972`, `974` (SART, MOB, EPIRB devices), `8…` handheld radios, `98…` craft of a parent ship, `99…` aids to navigation; anything else starting 1 or 9, or above 775, is invalid. Junk: a MID followed by zeros (`200000000`, `525000000`), repeated or sequential digits (`111111111`, `123456789`, `999999999`), `299999999` and the like (all seen: evidence 2, 5) | Changes when a ship is reflagged or sold, is reissued later, and is often shared or spoofed. Reflags show as one valid IMO with two MMSIs (evidence 4) |
 | `callSign` | weak | global | reassignable | no | 3 to 7 letters and digits | Changes with the flag |
-| `vesselName` | weak | global | reassignable | no | not empty after trimming | Not unique, and changes; a tie-breaker and search key |
+| `vesselName` | weak | global | reassignable | no | Trim trailing spaces and `@` (AIS padding). Not a name if it is then empty, still contains `@`, contains characters outside AIS's 6-bit text set, or equals the MMSI | Not unique, and changes; a tie-breaker and search key. Most "renames" in the lake are decode errors in the name text, not renames (evidence 2) |
 
 **Anchors.** A vessel whose IMO came from a source that vouches for it is anchored
 by the IMO: an MMSI that moves away ends its MMSI row, and the vessel stays. A vessel
 with no such IMO is anchored by its MMSI until the MMSI is reassigned or contested;
 then the vessel keeps its id and the MMSI row ends.
+
+**Not every AIS transmitter is a vessel.** Besides the device MMSIs above, some
+transmitters are fishing gear: net buoys whose name is a battery level, such as
+`REVO-62%` (evidence 2). The pack classifies them as gear (their own object type,
+later), not vessels.
 
 **Organizations** (later): the IMO also numbers registered owners and ship managers
 (IMO company numbers): a strong, permanent key for Organization in this pack.
@@ -236,10 +241,42 @@ An alert becomes an Alert entity through an action by a machine actor (O7), whic
 resolves its claim to an entity at the alert's time; an alert on a contested
 identifier says so.
 
-### Evidence to gather from the lake
+### Evidence from the lake (2026-11-20)
 
-The rules rest on these. Run them in Hue over a few days and record the answers
-here; they are the first use of the lake as evidence for the ontology (O0b).
+The first use of the lake as evidence for the ontology (O0b). Run 2026-11-20 over
+about 16 M vessel reports since the lake rework:
+
+1. **IMO coverage.** aisstream.io: 2,695,581 of 16,000,957 reports (17%) carry an
+   IMO, all from static messages. hormuz.now: none of 264,272.
+2. **MMSIs with several names:** almost none are renames. Most are decode errors in
+   AIS name text (`DARDA@!(7@@@@@@@X`); placeholder MMSIs shared by unrelated ships
+   (`0` with 14 names, `200000000`, `525000000`, `111111111`, `299999999 TESTSHIP`);
+   names equal to the MMSI; and fishing-gear buoys named by battery level
+   (`REVO-62%` to `REVO-82%`). A few look like real renames or shared MMSIs
+   (`368115220`: WESTPORT41M, TRU LUV, PRICELESS).
+3. **MMSIs with more than one hormuz.now vessel:** 12 (4 seen on 2026-11-19), 11 with
+   two vessels and `620999368` with three; mostly UAE (`470…`). Counted over all
+   time, so it doesn't yet separate two ships at once from hormuz.now renumbering a
+   vessel: query 7 does.
+4. **IMOs with several MMSIs:** 42. 15 fail the check digit (`1073741823`, which is
+   AIS's 2³⁰−1 "not available", with 62 MMSIs; `123456789`; `1`; `14`; ...).
+   `1234567` passes it and is junk. The other 26 look like reflags (Marshall Islands
+   `538…` with another flag) or MMSI typos (`241928000` and `241192800`).
+5. **MMSIs that aren't ships:** about 200: SART, EPIRB and MOB devices (`970`, `974`,
+   `972`), SAR aircraft (`111`), handheld radios (`8…`), `98x` and `99x`, MIDs above
+   775, other `1…` and `9…`, and `0` and `1`. The aisstream script checks no MMSI, so
+   these reach the lake as vessels; hormuz.now's checks for 9 digits.
+6. **ICAO addresses with several registrations:** none. Weak evidence: adsb.lol looks
+   the registration up from the address in its own database, so they can't disagree.
+
+Rules changed by this: the IMO junk list and AIS's "not available" value; the MMSI
+check (handheld radios, MID-and-zeros placeholders, invalid 1, 9 and 7xx ranges);
+the name check; fishing gear is not a vessel.
+
+### The queries
+
+Run in Hue (`iceberg.horus_dev.events_iceberg`). 1 to 6 were run 2026-11-20; 7 is
+next.
 
 ```sql
 -- 1. How often a vessel report carries an IMO, per source.
@@ -278,4 +315,21 @@ FROM iceberg.horus_dev.events_iceberg
 WHERE source_provider = 'adsb.lol' AND id_scheme = 'icao24'
   AND json_extract_scalar(payload, '$.entity.properties.registration') NOT IN ('N/A', '')
 GROUP BY 1 HAVING COUNT(DISTINCT json_extract_scalar(payload, '$.entity.properties.registration')) > 1;
+
+-- 7. For the MMSIs in 3: two hormuz.now vessels in the same 10 minutes, and how far
+--    apart. Far apart at once is two ships on one MMSI; never at once is hormuz.now
+--    renumbering one ship.
+WITH r AS (
+  SELECT asset_id, json_extract_scalar(payload, '$.entity.properties.hormuz_id') AS hid,
+         from_unixtime(floor(to_unixtime(event_time) / 600) * 600) AS t, lat, lon
+  FROM iceberg.horus_dev.events_iceberg
+  WHERE source_provider = 'hormuz.now' AND id_scheme = 'mmsi'
+    AND asset_id IN ('470613000', '457669000', '470902000', '470144000', '470922000', '470684000',
+                     '470676000', '470013000', '515232000', '470084000', '620999368', '470921000')),
+b AS (SELECT asset_id, hid, t, avg(lat) AS lat, avg(lon) AS lon FROM r GROUP BY 1, 2, 3)
+SELECT x.asset_id, COUNT(*) AS windows_together,
+       round(max(great_circle_distance(x.lat, x.lon, y.lat, y.lon))) AS max_km,
+       round(approx_percentile(great_circle_distance(x.lat, x.lon, y.lat, y.lon), 0.5)) AS median_km
+FROM b x JOIN b y ON x.asset_id = y.asset_id AND x.t = y.t AND x.hid < y.hid
+GROUP BY 1 ORDER BY max_km DESC;
 ```
