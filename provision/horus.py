@@ -348,6 +348,9 @@ def deploy_data_plane(cfg: cfgmod.Config, rep: Report, start_flows: bool) -> int
                 lake.ensure_raw_table(rep.gateway_env["HIVE_HOST"], int(rep.gateway_env["HIVE_PORT"]), user, pw,
                                       cfg.lake_catalog, cfg.database)
                 raw_table_ok = True
+                if lake_version == 2:   # the typed views Helios models (O0b)
+                    lake.ensure_views(rep.gateway_env["HIVE_HOST"], int(rep.gateway_env["HIVE_PORT"]), user, pw,
+                                      cfg.lake_catalog, cfg.database, cfg.table)
             except Exception as e:  # noqa: BLE001
                 print(f"lake: FAILED: {e}")
                 failures += 1
@@ -648,6 +651,38 @@ def rebuild_from_raw(cfg: cfgmod.Config, rep: Report, flow: Optional[str], first
     return 0
 
 
+def model_command(cfg: cfgmod.Config, rep: Report, command: str) -> int:
+    """Helios over the lake (O0b): model-propose, then review, then model-publish."""
+    import semantic
+    try:
+        import helios_model  # noqa: F401
+    except ImportError:
+        print("model: Helios is not installed in this Python. Install it (pinned):\n  pip install " +
+              " ".join(f"'{r}'" for r in semantic.pip_requirements()))
+        return 1
+    if not (cfg.workload_user and cfg.workload_password):
+        print("model: HORUS_WORKLOAD_USER / HORUS_WORKLOAD_PASSWORD not set")
+        return 1
+    if rep.gateway_env.get("LAKE_ENGINE") != "trino":
+        print("model: implemented for Trino warehouses only")
+        return 1
+    key = os.environ.get("MISTRAL_API_KEY") or os.environ.get("LLM_API_KEY")
+    model = os.environ.get("MISTRAL_MODEL") or os.environ.get("LLM_MODEL") or "mistral-large-latest"
+    if command == "model-propose" and not key:
+        print("model: no LLM key: set LLM_API_KEY (as on the feeds-gateway) or MISTRAL_API_KEY in this session")
+        return 1
+    config = semantic.instance_config(cfg.instance, rep.gateway_env["HIVE_HOST"], int(rep.gateway_env["HIVE_PORT"]),
+                                      cfg.lake_catalog, cfg.database, cfg.workload_user, model if key else None)
+    env = semantic.env(cfg.workload_password, key, os.environ.get("MISTRAL_BASE_URL") or os.environ.get("LLM_BASE_URL"))
+    import lake
+    if command == "model-propose":
+        semantic.propose(config, env, lake.views_database(cfg.database))
+        print("\nReview semantic/horus_lake/PROPOSAL.md, record the decisions in review.json, then model-publish.")
+    else:
+        semantic.publish(config, env, cfg.workload_user)
+    return 0
+
+
 def migrate_lake(cfg: cfgmod.Config, rep: Report, apply: bool) -> int:
     """Move this instance's events table to lake schema v2 with its history (burndown 16.5)."""
     import lake
@@ -736,7 +771,7 @@ def _print(rep: Report) -> None:
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(prog="horus provision")
     ap.add_argument("command", choices=["status", "create", "update-scripts", "migrate-lake", "maintain-lake",
-                                        "rebuild-from-raw"])
+                                        "rebuild-from-raw", "model-propose", "model-publish"])
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     ap.add_argument("--env-file", default=".env")
     ap.add_argument("--yes", action="store_true",
@@ -757,6 +792,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return migrate_lake(cfg, rep, apply=args.yes)
     if args.command == "maintain-lake":
         return maintain_lake(cfg, rep, apply=args.yes)
+    if args.command in ("model-propose", "model-publish"):
+        return model_command(cfg, rep, args.command)
     if args.command == "rebuild-from-raw":
         return rebuild_from_raw(cfg, rep, args.flow, args.first, args.last, apply=args.yes)
     if args.command == "create":

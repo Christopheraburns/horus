@@ -176,3 +176,100 @@ def ensure_raw_table(host: str, port: int, user: str, password: str, catalog: st
     _ensure_zstd(run, fq, database, RAW_TABLE, log)
     n = run(f"SELECT COUNT(*) FROM {fq}")[0][0]
     log(f"lake: {fq} ready ({n} rows)")
+
+
+# Typed views over events (burndown O0b): one per kind of thing, in their own schema
+# (horus_<instance>_views) so Helios harvests only them, never payload or bronze.
+# Each is a projection of events, with the feed's properties as typed columns.
+# Helios's compiler reads a dataset's source as a table, so the typed datasets are
+# views in the lake rather than queries in the model. Views keep no data of their own.
+def _prop(name: str) -> str:
+    return f"json_extract_scalar(payload, '$.entity.properties.{name}')"
+
+
+def _num(name: str, typ: str = "DOUBLE") -> str:
+    return f"TRY_CAST({_prop(name)} AS {typ})"
+
+
+KNOTS = 0.514444
+_COMMON = ("event_id, obs_hash, lat, lon, tile_z8, event_time, captured_at, "
+           "source_provider, classification, releasability")
+VIEWS = {
+    # A ship's position reports: aisstream PositionReport and hormuz.now snapshots.
+    "vessel_positions": f"""
+SELECT {_COMMON},
+  CASE WHEN id_scheme = 'mmsi' THEN asset_id END AS mmsi,
+  asset_id, id_scheme,
+  CASE WHEN source_provider = 'hormuz.now' THEN {_prop('hormuz_id')} END AS provider_vessel_id,
+  display_name AS vessel_name, asset_subtype AS vessel_type,
+  speed_mps, speed_mps / {KNOTS} AS speed_kn, course_deg, heading_deg,
+  {_num('navStatus', 'INTEGER')} AS nav_status,
+  {_prop('destination')} AS destination, {_prop('flag')} AS flag
+FROM {{events}}
+WHERE asset_type = 'VESSEL' AND COALESCE({_prop('msgType')}, 'PositionReport') = 'PositionReport'""",
+    # What a ship says about itself (AIS static data): the identity evidence.
+    "vessel_static_reports": f"""
+SELECT {_COMMON},
+  CASE WHEN id_scheme = 'mmsi' THEN asset_id END AS mmsi,
+  display_name AS vessel_name, asset_subtype AS vessel_type,
+  {_num('imo', 'BIGINT')} AS imo, NULLIF({_prop('callsign')}, '') AS call_sign,
+  {_num('shipType', 'INTEGER')} AS ais_ship_type, {_prop('destination')} AS destination,
+  {_num('length')} AS length_m, {_num('width')} AS width_m, {_num('draught')} AS draught_m
+FROM {{events}}
+WHERE asset_type = 'VESSEL' AND {_prop('msgType')} = 'ShipStaticData'""",
+    "aircraft_positions": f"""
+SELECT {_COMMON},
+  CASE WHEN id_scheme = 'icao24' THEN asset_id END AS icao24,
+  asset_id, id_scheme,
+  NULLIF({_prop('callsign')}, '') AS callsign,
+  NULLIF(NULLIF({_prop('registration')}, 'N/A'), '') AS registration,
+  NULLIF(NULLIF({_prop('model')}, 'Unknown'), '') AS aircraft_model,
+  asset_subtype AS flight_category, NULLIF({_prop('airline_code')}, '') AS airline_code,
+  NULLIF({_prop('squawk')}, '') AS squawk, alt_m,
+  speed_mps, speed_mps / {KNOTS} AS speed_kn, course_deg,
+  TRY_CAST({_prop('grounded')} AS BOOLEAN) AS on_ground
+FROM {{events}}
+WHERE asset_type = 'FLIGHT'""",
+    "earthquakes": f"""
+SELECT {_COMMON},
+  display_name AS place, asset_subtype AS quake_type,
+  {_num('mag')} AS magnitude, {_num('depth')} AS depth_km,
+  {_num('felt', 'INTEGER')} AS felt_reports, {_num('tsunami', 'INTEGER')} AS tsunami_flag,
+  {_prop('url')} AS source_url
+FROM {{events}}
+WHERE asset_type = 'SEISMIC'""",
+    "weather_events": f"""
+SELECT {_COMMON},
+  display_name AS title, asset_subtype AS weather_category, {_prop('wxtype')} AS weather_type,
+  {_prop('severity')} AS severity, {_prop('area')} AS area,
+  {_prop('expires')} AS expires, geom_wkt, bbox_min_lon, bbox_min_lat, bbox_max_lon, bbox_max_lat
+FROM {{events}}
+WHERE asset_type = 'WEATHER'""",
+    "fire_detections": f"""
+SELECT {_COMMON},
+  asset_subtype AS fire_type, {_num('brightness')} AS brightness_k, {_num('frp')} AS radiative_power_mw,
+  {_prop('confidence')} AS confidence, {_prop('satellite')} AS satellite
+FROM {{events}}
+WHERE asset_type = 'FIRE'""",
+}
+
+
+def views_database(database: str) -> str:
+    return f"{database}_views"
+
+
+def ensure_views(host: str, port: int, user: str, password: str, catalog: str,
+                 database: str, table: str = "events_iceberg", log=print) -> list:
+    """Create or replace the typed views (O0b) in <database>_views. Returns their names."""
+    cur = _cursor(host, port, user, password, catalog)
+
+    def run(sql: str) -> list:
+        cur.execute(sql)
+        return cur.fetchall()
+
+    vdb = views_database(database)
+    run(f"CREATE SCHEMA IF NOT EXISTS {catalog}.{vdb}")
+    for name, sql in VIEWS.items():
+        run(f"CREATE OR REPLACE VIEW {catalog}.{vdb}.{name} AS {sql.format(events=f'{catalog}.{database}.{table}')}")
+    log(f"lake: {len(VIEWS)} typed views in {catalog}.{vdb}: {', '.join(VIEWS)}")
+    return list(VIEWS)

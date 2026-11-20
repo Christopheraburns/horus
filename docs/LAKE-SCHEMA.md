@@ -163,6 +163,21 @@ box.
 | `event_time` | NOAA/NWS: `properties.date` converted to UTC (see below). Everything else: as v1 |
 | everything else | the same paths as v2, all present in v1 |
 
+## Typed views (burndown O0b)
+
+`events` is one table for every kind of thing. `create --yes` also creates typed
+views over it in their own schema, `horus_<instance>_views` (`provision/lake.py`,
+`VIEWS`), one per kind: `vessel_positions`, `vessel_static_reports`,
+`aircraft_positions`, `earthquakes`, `weather_events`, `fire_detections`. Each
+selects that kind's rows and turns its feed's properties into typed columns (an
+MMSI, an IMO, a callsign, a magnitude, speed in knots). Every row of `events` is in
+exactly one view. They hold no data, so they need no maintenance.
+
+They are what Helios models (`semantic/horus_lake/`): Helios's compiler reads a
+dataset's source as a table, so typed datasets are views in the lake rather than
+queries in the model. They are also a Ranger boundary: grant analysts the views
+schema, not `events` or `raw_responses`.
+
 ## Raw capture: the bronze table (burndown 17)
 
 `events_iceberg` is the silver layer: NiFi turns each upstream response into
@@ -246,6 +261,7 @@ Run locally with Docker, no platform needed:
 | `ssb/test/run_maintenance_local.sh` | Maintenance (16.6) on Trino 460: three finished days written as 15 small files each are compacted to one, today is left alone, rows are kept, a second pass does nothing; then reading the compacted file directly, it is one run sorted by `tile_z8` and a Strait of Hormuz bounding box overlaps 2 of its 38 row groups (16.7) |
 | `ssb/test/run_raw_flink_local.sh` | The raw capture job (17.4) on Flink 1.19 and Kafka 3.8: messages written as NiFi's raw publisher writes them; key, headers, Kafka timestamp and body read into every column; a failed fetch kept with its status; a message without headers (aisstream) and non-ASCII text; a repeated body stored once |
 | `ssb/test/run_rebuild_local.sh` | `rebuild-from-raw` (17.6) on Trino 460, replaying on Java 8 with only the Groovy jars: rows a broken NWS script wrote are rebuilt from the raw responses into the real script's rows; `captured_at` is the response's time; NWS rows from before raw capture and other providers' rows untouched; dry run changes nothing; a re-run gives the same rows; today refused; every provider each script writes is in `rebuild.FLOWS` |
+| `ssb/test/run_views_local.sh` | The typed views on Trino 460 over every feed's sample envelopes: each view has its rows and its typed columns filled, every event is in exactly one view; then Helios, set up by `provision/semantic.py`, harvests exactly the views and profiles them |
 | `ssb/test/run_raw_local.sh` | The bronze table on Trino 460: its columns are exactly the Flink job's INSERT; maintenance deletes days past the retention, compacts finished days (one file per flow), leaves today alone, keeps every other row, and has nothing to do the second time |
 | `ssb/test/run_trino_local.sh` | `provision/lake.py` on Trino 460: the v2 DDL is accepted, a v1 table is detected and left alone, and Trino's `tile_z8` and `obs_hash` (`lake.TILE_Z8_SQL`, `lake.OBS_HASH_SQL`, used by the backfill) agree with Flink's on every row |
 
