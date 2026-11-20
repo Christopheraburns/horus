@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -38,6 +39,15 @@ class Front:
             conn.close()
         self.local.conn = None
 
+
+class QuietServer(ThreadingHTTPServer):
+    """A client closing a kept-alive connection (the Workbench ingress, tileserver's
+    connection pool) is normal; don't print a traceback for it."""
+
+    def handle_error(self, request, client_address):
+        if isinstance(sys.exc_info()[1], (ConnectionResetError, BrokenPipeError, TimeoutError)):
+            return
+        super().handle_error(request, client_address)
 
 def make_handler(front: Front):
     class Handler(BaseHTTPRequestHandler):
@@ -98,6 +108,6 @@ def make_handler(front: Front):
 
 
 def serve(port: int, upstream_port: int, registry_public: dict, host: str = "127.0.0.1") -> ThreadingHTTPServer:
-    server = ThreadingHTTPServer((host, port), make_handler(Front(upstream_port, registry_public)))
+    server = QuietServer((host, port), make_handler(Front(upstream_port, registry_public)))
     server.daemon_threads = True
     return server

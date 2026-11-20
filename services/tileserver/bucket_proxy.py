@@ -15,6 +15,7 @@ header and directories; this cache mostly holds tiles.
 from __future__ import annotations
 
 import re
+import sys
 import threading
 from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -63,6 +64,15 @@ class Source:
         self.size = size
         self.get_range = get_range
 
+
+class QuietServer(ThreadingHTTPServer):
+    """A client closing a kept-alive connection (the Workbench ingress, tileserver's
+    connection pool) is normal; don't print a traceback for it."""
+
+    def handle_error(self, request, client_address):
+        if isinstance(sys.exc_info()[1], (ConnectionResetError, BrokenPipeError, TimeoutError)):
+            return
+        super().handle_error(request, client_address)
 
 def make_handler(sources: dict, cache: RangeCache, log: Callable[..., None]):
     denied = set()
@@ -127,6 +137,6 @@ def make_handler(sources: dict, cache: RangeCache, log: Callable[..., None]):
 def serve(port: int, sources: dict, cache_bytes: int, log: Callable[..., None]) -> tuple[ThreadingHTTPServer, RangeCache]:
     """Listens on 127.0.0.1 only. ``sources``: id -> Source."""
     cache = RangeCache(cache_bytes)
-    server = ThreadingHTTPServer(("127.0.0.1", port), make_handler(sources, cache, log))
+    server = QuietServer(("127.0.0.1", port), make_handler(sources, cache, log))
     server.daemon_threads = True
     return server, cache
