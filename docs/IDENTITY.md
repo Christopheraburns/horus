@@ -46,8 +46,8 @@ must work for both.
 4. **A value is checked before it is trusted.** A scheme names a value type, and a
    value type can name a check, supplied by the pack (a format, a check digit,
    reserved ranges, known junk values). A value that fails is not an identifier.
-5. **The source caps the strength.** A deployment declares which sources can vouch
-   for which schemes. A strong key from a source that can't vouch for it behaves as
+5. **The source caps the strength.** A deployment declares, on each of its sources,
+   which schemes it can vouch for (`vouchesFor`). A strong key from a source that can't vouch for it behaves as
    weak: it proposes and never links on its own.
 6. **Conflicts are flagged, never resolved silently.** Two entities claiming the
    same exclusive value at the same time, or one entity with two values of a
@@ -111,8 +111,11 @@ contest.
 
 1. ~~Accept `exclusive` and `concurrencyWindow` as identity key fields (O2)?~~
    Accepted 2026-11-20.
-2. Where source trust is declared: on the source in the extension (proposed:
-   `vouchesFor: [scheme, ...]`), or as a policy?
+2. ~~Where source trust is declared?~~ Decided 2026-11-20: on each source, in the
+   extension (`vouchesFor: [scheme, ...]`), not as a policy. It is provenance (in
+   RDF, PROV-O: a source is a `prov:Agent`, a claim a `prov:Entity` attributed to
+   it), the same for every caller, and owned by the deployment. Yes or no per
+   scheme to start; a confidence per scheme only if a real case needs it.
 
 ---
 
@@ -190,6 +193,8 @@ Schemes that only mean something inside one feed:
 | `adsb.lol` | weak | provider | reassignable | no | Aircraft | adsb.lol addresses starting `~` (non-ICAO, such as TIS-B): never linked to an aircraft |
 
 ### Source trust (principle 5)
+
+Declared on each source (`vouchesFor`), as decided 2026-11-20:
 
 | Source | Vouches for | Why |
 |---|---|---|

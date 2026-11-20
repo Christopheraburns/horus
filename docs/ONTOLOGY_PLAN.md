@@ -219,6 +219,8 @@ An entity type declares how its instances are recognised, so entity resolution a
 | `exclusive` | Whether a value names at most one instance at any moment (default true); two instances claiming it at once is a conflict, not a merge | an MMSI used by two ships at once | one serial printed on two parts |
 | `concurrencyWindow` | With `exclusive`: how close in time two claims must be to count as at once. For types that implement `Located`, a claim pair is a conflict only if the implied speed exceeds the type's `maxSpeed` | 10 minutes, with a vessel's 50 knots | a shift, for a part |
 
+**Source trust.** Each source a deployment declares lists the schemes it can vouch for (`vouchesFor`). A strong key claimed by a source that doesn't vouch for that scheme behaves as weak: it proposes and never links. This is provenance (PROV-O: a source is an Agent, a claim an Entity attributed to it), not policy. Example: AIS sends a ship's own MMSI but a crew-typed IMO, so an AIS feed vouches for `mmsi` only; a car plant's end-of-line scanner vouches for `vin`, a dealer's warranty claims for nothing.
+
 Added 2026-11-20 from the Horus evidence ([IDENTITY.md](IDENTITY.md)): `exclusive` and `concurrencyWindow`, because `validity` covers a value moving over time but not two instances using it at once, which AIS shows happening.
 
 The primary key is the entity's own stable id; identity keys are how observations and outside records find it. They are stored in the entity index as identifier rows (entity, scheme, value, valid from and to, source, confidence), which is the crosswalk entity resolution reads and writes.
