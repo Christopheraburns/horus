@@ -8,6 +8,7 @@ import {
   OPENFREEMAP_DARK_STYLE,
   transformBasemapRequest,
 } from '@/lib/tileProxy';
+import { tileJsonUrl, type TileSet } from '@/lib/tileRegistry';
 
 // Positions older than this are drawn faded and marked STALE in popups. The
 // gateway removes them entirely later (aircraft 25 min, moving ships 20 min,
@@ -46,6 +47,9 @@ interface HorusMapProps {
   flyToLocation?: { lat: number; lng: number; zoom?: number; ts: number } | null;
   projection?: 'mercator' | 'globe';
   mapStyle?: string;
+  /** The tile server's imagery (registry, bottom to top). The satellite view uses it when
+   *  there is any; otherwise Esri, and only where public tiles are allowed. */
+  imagery?: TileSet[];
   demoMode?: boolean;
   timeTravelActive?: boolean;
   timeTravelFrame?: { asset_id: string; asset_type: string; lat: number; lng: number; t: number; name?: string }[];
@@ -73,7 +77,7 @@ function computeSolarTerminator(): [number, number][] {
 
 const EMPTY_FC = { type: 'FeatureCollection' as const, features: [] };
 
-function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', mapStyle = 'dark', demoMode = false, timeTravelActive = false, timeTravelFrame = [], allowPublicTiles = true }: HorusMapProps) {
+function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightClick, onViewStateChange, flyToLocation, projection = 'globe', mapStyle = 'dark', demoMode = false, timeTravelActive = false, timeTravelFrame = [], allowPublicTiles = true, imagery = [] }: HorusMapProps) {
   // Read inside the map's one-time error handler, so keep the latest value in a ref.
   const allowPublicTilesRef = useRef(allowPublicTiles);
   allowPublicTilesRef.current = allowPublicTiles;
@@ -81,7 +85,6 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const [mapReady, setMapReady] = useState(false);
-  const prevStyleRef = useRef(mapStyle);
 
   // Create aircraft icon on canvas (for WebGL symbol layer)
   const createIcon = useCallback((map: maplibregl.Map, id: string, color: string, size: number) => {
@@ -1355,16 +1358,34 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
     }
   }, [mapReady, activeLayers.terrain_3d]);
 
-  // Satellite / Dark style switching
+  // Satellite view. Horus's own imagery (8.4): one raster source per imagery tile file,
+  // added the first time the view is turned on, so nothing is requested before. Each
+  // is limited to its bounds (from its TileJSON), so tiles outside are never asked
+  // for, and they stack as the registry lists them: global under the regions. They
+  // go under the basemap's roads, borders and labels, which stay readable on top.
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
-    if (mapStyle === prevStyleRef.current) return;
-    prevStyleRef.current = mapStyle;
     const map = mapRef.current;
-
+    const on = mapStyle !== 'dark';
     try {
-      if (mapStyle !== 'dark') {
-        // Add satellite raster tiles
+      if (imagery.length) {
+        const layers = map.getStyle().layers ?? [];
+        const before = layers.find(l => l.type === 'line' || l.type === 'symbol')?.id
+          ?? (map.getLayer('day-night-fill') ? 'day-night-fill' : undefined);
+        for (const t of imagery) {
+          const id = `imagery-${t.id}`;
+          if (map.getSource(id)) {
+            map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
+          } else if (on) {
+            map.addSource(id, { type: 'raster', url: tileJsonUrl(t.id), tileSize: 256 });
+            map.addLayer({ id, type: 'raster', source: id, paint: { 'raster-fade-duration': 150 } }, before);
+          }
+        }
+        if (map.getLayer('satellite-layer')) map.setLayoutProperty('satellite-layer', 'visibility', 'none');
+        return;
+      }
+      // No Horus imagery: Esri World Imagery, a public tile server (PUBLIC mode only).
+      if (on && allowPublicTiles) {
         if (!map.getSource('satellite-tiles')) {
           map.addSource('satellite-tiles', {
             type: 'raster',
@@ -1376,15 +1397,13 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
         } else {
           map.setLayoutProperty('satellite-layer', 'visibility', 'visible');
         }
-      } else {
-        if (map.getLayer('satellite-layer')) {
-          map.setLayoutProperty('satellite-layer', 'visibility', 'none');
-        }
+      } else if (map.getLayer('satellite-layer')) {
+        map.setLayoutProperty('satellite-layer', 'visibility', 'none');
       }
     } catch (e) {
       console.warn('Style switch failed:', e);
     }
-  }, [mapReady, mapStyle]);
+  }, [mapReady, mapStyle, imagery, allowPublicTiles]);
 
   return <div ref={containerRef} className="absolute inset-0 w-full h-full" />;
 }

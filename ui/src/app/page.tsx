@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { MIGRATED_FEEDS } from '@/lib/connectionMode';
+import { fetchImagery, type TileSet } from '@/lib/tileRegistry';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Newspaper, Search, X, Globe, MapPinned, Satellite, Moon, ExternalLink, AlertTriangle, Activity, Database, Wifi, Play, Network, Crosshair } from 'lucide-react';
 import IntelFeed from '@/components/IntelFeed';
@@ -109,6 +110,9 @@ export default function Dashboard() {
   const [mobilePanel, setMobilePanel] = useState<'layers'|'intel'|'search'|null>(null);
   const [mapProjection, setMapProjection] = useState<'globe'|'mercator'>('globe');
   const [mapStyle, setMapStyle] = useState<'dark'|'satellite'>('dark');
+  // The tile server's own imagery (8.4), read from its registry once on load.
+  const [horusImagery, setHorusImagery] = useState<TileSet[]>([]);
+  useEffect(() => { fetchImagery().then(setHorusImagery); }, []);
   const [entityGraphTarget, setEntityGraphTarget] = useState<{ type: string; id: string; label?: string; properties?: Record<string, any> } | null>(null);
   const [demoMode, setDemoMode] = useState(false);
   const [timeTravelActive, setTimeTravelActive] = useState(false);
@@ -158,12 +162,13 @@ export default function Dashboard() {
   const [liveFeedEmbedAllowed, setLiveFeedEmbedAllowed] = useState(true);
 
   // PIPELINE mode: turn off the views that load public map tiles (Esri satellite
-  // imagery, OpenFreeMap 3D buildings) so the browser only talks to Horus.
+  // imagery, OpenFreeMap 3D buildings) so the browser only talks to Horus. The
+  // satellite view stays if the Horus tile server has imagery of its own.
   useEffect(() => {
     if (!securedMode) return;
-    setMapStyle('dark');
+    if (!horusImagery.length) setMapStyle('dark');
     setActiveLayers(prev => (prev.terrain_3d ? { ...prev, terrain_3d: false } : prev));
-  }, [securedMode, activeLayers.terrain_3d]);
+  }, [securedMode, activeLayers.terrain_3d, horusImagery.length]);
 
   // On mount: restore layers and deep links from the URL (IP fly-to is disabled below)
   useEffect(() => {
@@ -559,7 +564,8 @@ export default function Dashboard() {
           data={data} 
           activeLayers={activeLayers} 
           projection={mapProjection} 
-          mapStyle={mapStyle === 'satellite' ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' : 'dark'} 
+          mapStyle={mapStyle}
+          imagery={horusImagery}
           onEntityClick={handleEntityClick} 
           onMouseCoords={handleMouseCoords} 
           onRightClick={handleRightClick} 
@@ -601,8 +607,9 @@ export default function Dashboard() {
           </span>
         </button>
 
-        {/* Map Style Toggle (satellite imagery is a public tile server: hidden in PIPELINE mode) */}
-        {!securedMode && (
+        {/* Map Style Toggle: Horus's own imagery when the tile server has some; otherwise
+            Esri, a public tile server, so hidden in PIPELINE mode */}
+        {(!securedMode || horusImagery.length > 0) && (
           <button
             onClick={() => setMapStyle(s => s === 'dark' ? 'satellite' : 'dark')}
             className="glass-panel p-3.5 pointer-events-auto hover:border-[var(--gold-primary)]/40 transition-colors group relative"
