@@ -383,7 +383,7 @@ never through a browser upload or the Workbench project.
 | ID | Item | Done when | Est | Status |
 |---|---|---|---|---|
 | E1 | Convert the 7 MBTiles to PMTiles and check them: `scripts/to_pmtiles.sh` | The script ends with "All 7 files converted and checked" | 1 | Todo |
-| E2 | Copy the 7 PMTiles and their `SHA256SUMS` to the instance's bucket prefix and verify the checksums there | Checksums verified in the bucket | 1 | Blocked: waiting for the bucket path and how this workstation authenticates to it (Horus 8.1 and 8.9) |
+| E2 | Copy the 7 PMTiles and their `SHA256SUMS` to `<storage-base>/data/horus/<instance>/tiles/` with the AWS CLI | All 8 files listed in the bucket with the right sizes; the tile service's checks pass on them once it reads the bucket (Horus 8.9) | 1 | Todo |
 
 #### E1: how to run it
 
@@ -416,6 +416,29 @@ output. One failure to know about: if the tile service's check says the
 PMTiles header's maxzoom differs from its metadata, the map would stop at the
 lower zoom. A long run of identical tiles (empty ocean, for example) can cause
 this in the converter, and `pmtiles edit` can't fix it cleanly.
+
+#### E2: how to run it
+
+The destination is the CDP environment's storage location (Management Console,
+Environments, the environment, Summary: "storage location base", for example
+`s3a://<bucket>/`), then `data/horus/<instance>/tiles/`, beside the lake's
+warehouse under `data/`. Use `s3://` with the AWS CLI. This workstation is
+outside CDP, so it needs an AWS identity that can write to the bucket; Ranger
+RAZ governs access through CDP, not this upload.
+
+```bash
+DEST=s3://<bucket>/data/horus/<instance>/tiles/
+aws sts get-caller-identity                 # an AWS identity is configured
+aws s3 ls "${DEST%horus/*}"                 # it can see the bucket's data/ folder
+aws s3 cp ~/horus-imagery/out/pmtiles/ "$DEST" --recursive --exclude "*.ok"
+aws s3 ls "$DEST" --human-readable          # 7 .pmtiles and SHA256SUMS
+```
+
+AWS CLI v2 sends an integrity checksum with each part and S3 rejects a
+damaged one. If the first two commands fail, there is no AWS identity with
+access: ask the AWS account owner for one, or copy the files to a CDP gateway
+node and put them from there with the workload credentials (slower; needs
+16 GB on the node).
 
 To check any single file the way the tile service will:
 `python3 ../services/tileserver/tilestore.py FILE`.
