@@ -2,6 +2,7 @@
 
 Writes ssb/test/out/events.jsonl. Expected alerts (7): AIS_GAP 111, LOITERING 113,
 STS_ENCOUNTER 115/116 and 117/118, SPEED_JUMP 119 and fff000, SQUAWK_EMERGENCY abc123.
+None for 130 (two ships on one MMSI) or 131 (one id value under two schemes).
 """
 import datetime as dt
 import json
@@ -13,10 +14,11 @@ os.makedirs(OUT, exist_ok=True)
 T0 = dt.datetime(2026, 11, 18, 0, 0, 0)
 rows = []
 def iso(t): return t.strftime("%Y-%m-%dT%H:%M:%SZ")
-def vessel(mmsi, t, lat, lon, sog, nav=0, msg="PositionReport", name=None):
+def vessel(mmsi, t, lat, lon, sog, nav=0, msg="PositionReport", name=None, original=None, scheme="mmsi"):
     rows.append((t, {"schema_version":1,"trace_id":"x","source":"vessels","captured_at":iso(t),
       "entity":{"id":str(mmsi),"name":name or f"SHIP{mmsi}","entityType":"VESSEL","position":{"lat":lat,"lng":lon,"alt":0.0},
-      "timestamp":iso(t),"source":{"provider":"aisstream.io","feed":"vessels","originalId":str(mmsi)},
+      "timestamp":iso(t),"source":{"provider":"aisstream.io","feed":"vessels","originalId":original or str(mmsi),
+                                   "idScheme":scheme},
       "properties":{"mmsi":mmsi,"msgType":msg,"sog":sog,"cog":90,"navStatus":nav}}}))
 def flight(hexid, t, lat, lon, kn, squawk=""):
     rows.append((t, {"schema_version":1,"trace_id":"x","source":"flights","captured_at":iso(t),
@@ -55,6 +57,15 @@ flight("fff000", T0+20*M, 35.0, -100.0, 450); flight("fff000", T0+21*M, 40.0, -1
 flight("aaa111", T0+20*M, 35.0, -80.0, 480); flight("aaa111", T0+32*M, 36.6, -80.0, 480)
 # earthquake (other feed) -> ignored
 rows.append((T0+M, {"schema_version":1,"captured_at":iso(T0+M),"entity":{"id":"us123","entityType":"EARTHQUAKE","position":{"lat":1,"lng":2},"properties":{}}}))
+# 130: two ships on one MMSI (two source records, ~110 km apart, reporting
+#      alternately) -> no SPEED_JUMP (docs/IDENTITY.md, evidence 7)
+for i in range(20):
+    vessel(130, T0+i*2*M, 24.5, 55.0, 8, original="h1")
+    vessel(130, T0+i*2*M+M, 24.5, 56.1, 8, original="h2")
+# 131: the same id value under two schemes, far apart -> no SPEED_JUMP
+for i in range(10):
+    vessel(131, T0+i*2*M, 10.0, 70.0, 8)
+    vessel(131, T0+i*2*M+M, 12.0, 72.0, 8, scheme="hormuz.now")
 rows.sort(key=lambda r: r[0])
 with open(os.path.join(OUT, "events.jsonl"), "w") as fh:
     for _, r in rows: fh.write(json.dumps(r)+"\n")

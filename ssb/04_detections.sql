@@ -13,8 +13,15 @@
 --                    at 0.3-2 kn average (anchored, moored and fishing are excluded).
 --   STS_ENCOUNTER    two vessels, both < 2 kn and not moored, within 0.15 nm of each
 --                    other over the same hour (ship-to-ship transfer pattern).
---   SPEED_JUMP       consecutive positions imply > 60 kn (vessel) or > 1000 kn
---                    (aircraft) over a real distance: spoofing or a shared identifier.
+--   SPEED_JUMP       consecutive positions from the same source record imply > 60 kn
+--                    (vessel) or > 1000 kn (aircraft) over a real distance: spoofing.
+--
+-- Keys (docs/IDENTITY.md, "The detections job"): every check keys on (id_scheme,
+-- asset_id), so a provider id never collides with an MMSI. SPEED_JUMP also keys on
+-- the source's own record id (entity.source.originalId): two ships on one MMSI are
+-- two records, so their positions are never compared with each other. The gap
+-- check stays on the claimed identifier alone: a vessel that goes dark and comes
+-- back under a new provider id must still be caught.
 --   SQUAWK_EMERGENCY aircraft squawking 7500 (hijack), 7600 (radio failure) or
 --                    7700 (emergency).
 --
@@ -88,7 +95,11 @@ CREATE TEMPORARY TABLE horus_alerts (
 CREATE TEMPORARY VIEW track_points AS
 SELECT
     JSON_VALUE(payload, '$.entity.entityType')                          AS asset_type,
+    -- In PARTITION BY order: MATCH_RECOGNIZE names its key columns by position.
+    COALESCE(JSON_VALUE(payload, '$.entity.source.idScheme'), '')       AS id_scheme,
     JSON_VALUE(payload, '$.entity.id')                                  AS asset_id,
+    COALESCE(JSON_VALUE(payload, '$.entity.source.originalId'),
+             JSON_VALUE(payload, '$.entity.id'))                        AS source_key,
     COALESCE(JSON_VALUE(payload, '$.entity.name'),
              JSON_VALUE(payload, '$.entity.id'))                        AS asset_name,
     CAST(JSON_VALUE(payload, '$.entity.position.lat') AS DOUBLE)        AS lat,
@@ -109,11 +120,32 @@ WHERE JSON_VALUE(payload, '$.entity.id') IS NOT NULL
 CREATE TEMPORARY VIEW vessel_points AS
 SELECT * FROM track_points WHERE asset_type = 'VESSEL';
 
--- Every pair of consecutive reports for the same asset (A = previous, B = current).
+-- Every pair of consecutive reports for the same claimed identifier (A = previous,
+-- B = current), and the same per source record (SPEED_JUMP only).
 CREATE TEMPORARY VIEW track_pairs AS
 SELECT * FROM track_points
 MATCH_RECOGNIZE (
-    PARTITION BY asset_type, asset_id
+    PARTITION BY asset_type, id_scheme, asset_id
+    ORDER BY event_ts
+    MEASURES
+        B.asset_name AS asset_name,
+        A.lat        AS lat1,
+        A.lon        AS lon1,
+        A.speed_kn   AS speed1,
+        A.event_ts   AS t1,
+        B.lat        AS lat2,
+        B.lon        AS lon2,
+        B.event_ts   AS t2
+    ONE ROW PER MATCH
+    AFTER MATCH SKIP TO LAST B
+    PATTERN (A B)
+    DEFINE B AS B.event_ts >= A.event_ts
+);
+
+CREATE TEMPORARY VIEW track_pairs_by_record AS
+SELECT * FROM track_points
+MATCH_RECOGNIZE (
+    PARTITION BY asset_type, id_scheme, asset_id, source_key
     ORDER BY event_ts
     MEASURES
         B.asset_name AS asset_name,
@@ -133,13 +165,23 @@ MATCH_RECOGNIZE (
 -- Elapsed seconds and great-circle distance (nautical miles) between the two reports.
 CREATE TEMPORARY VIEW track_steps AS
 SELECT
-    asset_type, asset_id, asset_name, lat1, lon1, speed1,
+    asset_type, id_scheme, asset_id, asset_name, lat1, lon1, speed1,
     CAST(t1 AS TIMESTAMP(3)) AS t1, lat2, lon2, CAST(t2 AS TIMESTAMP(3)) AS t2,
     CAST(TIMESTAMPDIFF(SECOND, t1, t2) AS DOUBLE) AS dt_s,
     3440.065 * 2 * ASIN(SQRT(LEAST(1.0,
         POWER(SIN(RADIANS(lat2 - lat1) / 2), 2)
         + COS(RADIANS(lat1)) * COS(RADIANS(lat2)) * POWER(SIN(RADIANS(lon2 - lon1) / 2), 2)))) AS dist_nm
 FROM track_pairs;
+
+CREATE TEMPORARY VIEW track_steps_by_record AS
+SELECT
+    asset_type, id_scheme, asset_id, asset_name, lat1, lon1, speed1,
+    CAST(t1 AS TIMESTAMP(3)) AS t1, lat2, lon2, CAST(t2 AS TIMESTAMP(3)) AS t2,
+    CAST(TIMESTAMPDIFF(SECOND, t1, t2) AS DOUBLE) AS dt_s,
+    3440.065 * 2 * ASIN(SQRT(LEAST(1.0,
+        POWER(SIN(RADIANS(lat2 - lat1) / 2), 2)
+        + COS(RADIANS(lat1)) * COS(RADIANS(lat2)) * POWER(SIN(RADIANS(lon2 - lon1) / 2), 2)))) AS dist_nm
+FROM track_pairs_by_record;
 
 -- AIS_GAP
 CREATE TEMPORARY VIEW alert_ais_gap AS
@@ -170,7 +212,7 @@ SELECT
            CAST(CAST(ROUND(dist_nm * 3600 / GREATEST(dt_s, 1.0), 0) AS INT) AS STRING),
            ' kn): spoofed position or shared identifier') AS summary,
     DATE_FORMAT(t2, 'yyyyMMddHH') AS bucket
-FROM track_steps
+FROM track_steps_by_record
 WHERE (asset_type = 'VESSEL' AND dist_nm > 5    AND dist_nm * 3600 / GREATEST(dt_s, 1.0) > 60)
    OR (asset_type = 'FLIGHT' AND dist_nm > 20   AND dist_nm * 3600 / GREATEST(dt_s, 1.0) > 1000);
 
@@ -194,7 +236,7 @@ WHERE asset_type = 'FLIGHT' AND squawk IN ('7500', '7600', '7700');
 -- LOITERING: 2 h windows every 30 min.
 CREATE TEMPORARY VIEW vessel_loiter_windows AS
 SELECT
-    asset_id,
+    id_scheme, asset_id,
     MAX(asset_name) AS asset_name,
     AVG(lat)                                         AS lat,
     AVG(lon)                                         AS lon,
@@ -203,7 +245,7 @@ SELECT
     AVG(speed_kn)                                    AS avg_kn,
     window_end
 FROM TABLE(HOP(TABLE vessel_points, DESCRIPTOR(event_ts), INTERVAL '30' MINUTES, INTERVAL '2' HOURS))
-GROUP BY window_start, window_end, asset_id
+GROUP BY window_start, window_end, id_scheme, asset_id
 HAVING COUNT(*) >= 10
    AND TIMESTAMPDIFF(MINUTE, MIN(event_ts), MAX(event_ts)) >= 90
    -- >= 0.3 kn: drifting or holding station; berthed ships whose AIS still says
@@ -231,7 +273,7 @@ FROM vessel_loiter_windows;
 -- ~1.2 nm grid (each vessel is compared with its own and the 8 neighbouring cells).
 CREATE TEMPORARY VIEW vessel_hours AS
 SELECT
-    window_start, window_end, asset_id,
+    window_start, window_end, id_scheme, asset_id,
     MAX(asset_name) AS asset_name,
     AVG(lat)               AS lat,
     AVG(lon)               AS lon,
@@ -240,7 +282,7 @@ SELECT
     CAST(FLOOR(AVG(lat) / 0.02) AS BIGINT) AS cy,
     CAST(FLOOR(AVG(lon) / 0.02) AS BIGINT) AS cx
 FROM TABLE(TUMBLE(TABLE vessel_points, DESCRIPTOR(event_ts), INTERVAL '1' HOUR))
-GROUP BY window_start, window_end, asset_id
+GROUP BY window_start, window_end, id_scheme, asset_id
 HAVING COUNT(*) >= 3
    AND MAX(speed_kn) < 2
    AND MAX(CASE WHEN nav_status = 5 THEN 1 ELSE 0 END) = 0;
@@ -262,7 +304,8 @@ SELECT
         + COS(RADIANS(a.lat)) * COS(RADIANS(b.lat)) * POWER(SIN(RADIANS(b.lon - a.lon) / 2), 2)))) AS dist_nm
 FROM vessel_hours_near AS a
 JOIN vessel_hours AS b
-  ON a.window_start = b.window_start AND a.ny = b.cy AND a.nx = b.cx AND a.asset_id < b.asset_id;
+  ON a.window_start = b.window_start AND a.ny = b.cy AND a.nx = b.cx
+ AND (a.id_scheme < b.id_scheme OR (a.id_scheme = b.id_scheme AND a.asset_id < b.asset_id));
 
 CREATE TEMPORARY VIEW alert_sts AS
 SELECT
