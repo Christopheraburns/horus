@@ -61,6 +61,27 @@ OBS_HASH_SQL = ("lower(to_hex(sha256(to_utf8({event_id} || '|' || CAST(CAST("
                 "to_unixtime(with_timezone({event_time}, 'UTC')) * 1000 AS BIGINT) AS VARCHAR)))))")
 
 
+# The bronze table (burndown 17, docs/LAKE-SCHEMA.md "Raw capture"): every upstream
+# response as NiFi received it. Order matches the INSERT in ssb/05_raw_to_iceberg.sql.
+RAW_TABLE = "raw_responses"
+RAW_COLUMNS = """
+    flow            VARCHAR,
+    source_url      VARCHAR,
+    http_status     INTEGER,
+    content_type    VARCHAR,
+    received_at     TIMESTAMP(6),
+    ingest_time     TIMESTAMP(6),
+    body_sha256     VARCHAR,
+    body_chars      BIGINT,
+    body            VARCHAR,
+    kafka_partition INTEGER,
+    kafka_offset    BIGINT
+"""
+RAW_TABLE_PROPERTIES = ("format = 'PARQUET', format_version = 2, "
+                        "partitioning = ARRAY['day(received_at)', 'flow'], "
+                        "sorted_by = ARRAY['received_at']")
+
+
 def _cursor(host: str, port: int, user: str, password: str, catalog: str):
     import trino  # lazy
 
@@ -138,3 +159,20 @@ def ensure_table(host: str, port: int, user: str, password: str, catalog: str,
     n = run(f"SELECT COUNT(*) FROM {fq}")[0][0]
     log(f"lake: {fq} ready ({n} rows)")
     return 2
+
+
+def ensure_raw_table(host: str, port: int, user: str, password: str, catalog: str,
+                     database: str, log=print) -> None:
+    """Create the bronze table beside events if there is none (burndown 17.4)."""
+    cur = _cursor(host, port, user, password, catalog)
+
+    def run(sql: str) -> list:
+        cur.execute(sql)
+        return cur.fetchall()
+
+    run(f"CREATE SCHEMA IF NOT EXISTS {catalog}.{database}")
+    fq = f"{catalog}.{database}.{RAW_TABLE}"
+    run(f"CREATE TABLE IF NOT EXISTS {fq} ({RAW_COLUMNS}) WITH ({RAW_TABLE_PROPERTIES})")
+    _ensure_zstd(run, fq, database, RAW_TABLE, log)
+    n = run(f"SELECT COUNT(*) FROM {fq}")[0][0]
+    log(f"lake: {fq} ready ({n} rows)")

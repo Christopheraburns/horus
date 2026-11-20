@@ -45,9 +45,19 @@ def topic_partitions(brokers: List[str], user: str, password: str, ca_file: str,
     return len(t.partitions) if t is not None else None
 
 
+# The raw topic (burndown 17.2). Messages are whole upstream responses: FIRMS's
+# 24 h CSV was 6.2 MB (1.5 MB compressed) on 2026-11-20, so the limit is raised well
+# above Kafka's 1 MB; the broker checks the compressed size. Three days covers a
+# weekend's Flink outage; the bronze table is the long-term copy.
+RAW_TOPIC_CONFIG = {"max.message.bytes": str(16 * 1024 * 1024),
+                    "retention.ms": str(3 * 24 * 3600 * 1000)}
+
+
 def ensure_topic(brokers: List[str], user: str, password: str, ca_file: str, topic: str,
-                 partitions: int = 3, replication: int = 3, log=print) -> bool:
-    """Returns True if the topic was created, False if it already existed."""
+                 partitions: int = 3, replication: int = 3, log=print,
+                 config: Optional[dict] = None) -> bool:
+    """Returns True if the topic was created, False if it already existed. ``config``
+    (topic settings) applies on creation; an existing topic is left as it is."""
     from confluent_kafka.admin import NewTopic
 
     admin, md = _admin(brokers, user, password, ca_file)
@@ -55,7 +65,8 @@ def ensure_topic(brokers: List[str], user: str, password: str, ca_file: str, top
         log(f"kafka: topic {topic} already exists")
         return False
     replication = min(replication, len(md.brokers))
-    fut = admin.create_topics([NewTopic(topic, num_partitions=partitions, replication_factor=replication)])
+    fut = admin.create_topics([NewTopic(topic, num_partitions=partitions, replication_factor=replication,
+                                        config=config or {})])
     try:
         fut[topic].result(60)
     except Exception as e:  # noqa: BLE001

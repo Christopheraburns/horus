@@ -163,6 +163,57 @@ box.
 | `event_time` | NOAA/NWS: `properties.date` converted to UTC (see below). Everything else: as v1 |
 | everything else | the same paths as v2, all present in v1 |
 
+## Raw capture: the bronze table (burndown 17)
+
+`events_iceberg` is the silver layer: NiFi turns each upstream response into
+envelopes, and `payload` holds the envelope, not the response. So each flow also
+publishes the response itself, as received, and the bronze table keeps it for
+`RAW_RETENTION_DAYS` (default 30). That lets `events` be rebuilt after a NiFi
+script bug (17.6), and lets an agent's finding cite the record it came from.
+
+The path: each flow's InvokeHTTP **Response** (aisstream: ConnectWebSocket's
+**binary message**) also goes to a second PublishKafka, "Publish raw response"
+(`provision/raw_capture.py`), on `horus-<instance>-raw`; the Flink job
+`horus_<instance>_raw_to_iceberg` (`ssb/05_raw_to_iceberg.sql`) writes it to
+`raw_responses`. A failed or stopped raw publisher never holds up the events path:
+its failures are dropped, and its queue expires after 3 minutes.
+
+| Column | Type | From |
+|---|---|---|
+| `flow` | string | the Kafka key: `usgs`, `firms`, `opensky`, `adsblol`, `aisstream`, `hormuznow`, `eonet`, `nws` |
+| `source_url` | string | header `invokehttp.request.url` (null for aisstream) |
+| `http_status` | int | header `invokehttp.status.code`; failed fetches are kept too |
+| `content_type` | string | header `mime.type` |
+| `received_at` | timestamp(6) UTC | the Kafka timestamp: when NiFi published it, just after receipt |
+| `ingest_time` | timestamp(6) UTC | when Flink wrote the row |
+| `body_sha256` | string | SHA-256 of the body, lower-case hex |
+| `body_chars` | bigint | length of the body in characters |
+| `body` | string | the response exactly as received |
+| `kafka_partition`, `kafka_offset` | int, bigint | where it was on the raw topic |
+
+Iceberg v2, Parquet with zstd, partitioned by `day(received_at)` and `flow`, sorted
+by `received_at`. An identical body from the same flow within 36 hours is stored
+once (an unchanged hormuz.now snapshot, the USGS and FIRMS files re-sent on every
+poll). Nightly maintenance deletes days past the retention, then compacts like
+`events`.
+
+Sizes measured 2026-11-20, from outside AWS, one response each:
+
+| Flow | Response | zstd | Every | Raw per day before dedupe |
+|---|---|---|---|---|
+| `firms` | 6.2 MB | 1.5 MB | 10 min | 0.9 GB (about 220 MB compressed) |
+| `opensky` (off by default) | 1.7 MB | 0.5 MB | 90 s | 1.6 GB (about 480 MB) |
+| `hormuznow` | 0.5 MB | 81 KB | 30 s | 1.5 GB (about 230 MB) |
+| `nws` | 0.9 MB | 48 KB | 10 min | 130 MB (about 7 MB) |
+| `eonet`, `usgs`, `adsblol` | 28–74 KB | 5–7 KB | 5–12 min | a few MB each |
+| `aisstream` | about 0.5 KB a message | | continuous | about 2.5 GB at 5 M messages a day (about 0.5 GB) |
+
+So bronze is of the order of 1 GB a day compressed before dedupe, about as much
+as `events`; 30 days is about 30 GB. The largest message sets the limits: the raw
+topic's `max.message.bytes` is 16 MB (compressed) and the publisher's
+`max.request.size` 32 MB (uncompressed, which the producer checks), so FIRMS's
+fire-season file fits. Measure the real daily volume once it runs (17.1).
+
 ## Found while writing this
 
 Each is fixed by v2 or by its backfill rule:
@@ -193,6 +244,8 @@ Run locally with Docker, no platform needed:
 | `ssb/test/run_lake_local.sh` | The lake job's views and dedupe (Flink 1.19) turn those envelopes, a duplicate and a v1 message into rows that match a Python reference column by column |
 | `ssb/test/run_migration_local.sh` | The migration on Trino 460: a v1 table filled from the v1 scripts (git `7f1c2dd`) and the v2 scripts, as the v1 job wrote it; every row kept; v2-payload rows equal the Flink job's; v1-payload rows equal their v2 twins within the precision v1 kept; re-run, partial-day redo and swap; the gateway's Time Travel query before and after |
 | `ssb/test/run_maintenance_local.sh` | Maintenance (16.6) on Trino 460: three finished days written as 15 small files each are compacted to one, today is left alone, rows are kept, a second pass does nothing; then reading the compacted file directly, it is one run sorted by `tile_z8` and a Strait of Hormuz bounding box overlaps 2 of its 38 row groups (16.7) |
+| `ssb/test/run_raw_flink_local.sh` | The raw capture job (17.4) on Flink 1.19 and Kafka 3.8: messages written as NiFi's raw publisher writes them; key, headers, Kafka timestamp and body read into every column; a failed fetch kept with its status; a message without headers (aisstream) and non-ASCII text; a repeated body stored once |
+| `ssb/test/run_raw_local.sh` | The bronze table on Trino 460: its columns are exactly the Flink job's INSERT; maintenance deletes days past the retention, compacts finished days (one file per flow), leaves today alone, keeps every other row, and has nothing to do the second time |
 | `ssb/test/run_trino_local.sh` | `provision/lake.py` on Trino 460: the v2 DDL is accepted, a v1 table is detected and left alone, and Trino's `tile_z8` and `obs_hash` (`lake.TILE_Z8_SQL`, `lake.OBS_HASH_SQL`, used by the backfill) agree with Flink's on every row |
 
 ## Open checks

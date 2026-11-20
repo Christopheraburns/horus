@@ -298,3 +298,35 @@ def deploy(nifi: NiFi, instance: str, ctx_name: str, params: Dict[str, tuple],
     else:
         log("nifi: flows left stopped (Kafka not ready, or --no-start)")
     return groups
+
+
+def add_raw_capture(nifi: NiFi, instance: str, apply: bool, log=print,
+                    optional: frozenset = frozenset()) -> int:
+    """Add the raw-capture branch (burndown 17.3, raw_capture.py) to imported flows that
+    lack it, through the API: the flow's state and queues are kept. Returns how many
+    flows lack it (or got it)."""
+    import raw_capture
+    root = nifi.root_id()
+    by_name = {g["component"]["name"]: g for g in nifi.child_groups(root)}
+    prefix = f"HORUS-{instance} - "
+    missing = 0
+    for path in sorted(glob.glob(os.path.join(FLOW_DIR, "HORUS_*.json"))):
+        base = os.path.basename(path)
+        key = OPTIONAL_FLOWS.get(base)
+        if key and key not in optional:
+            continue
+        name = json.load(open(path))["flowContents"]["name"].replace("HORUS - ", prefix, 1)
+        g = by_name.get(name)
+        if g is None:
+            continue   # not imported; `deploy` imports it with the branch already in it
+        procs = nifi.processors(g["id"])
+        if any(p["component"]["name"] == raw_capture.PUBLISHER_NAME for p in procs):
+            log(f"nifi: {name}: raw capture present")
+            continue
+        missing += 1
+        if not apply:
+            log(f"nifi: {name}: no raw capture (would add it)")
+            continue
+        done = raw_capture.add_to_live(nifi, g["id"], raw_capture.FLOW_KEYS[base], log, name)
+        log(f"nifi: {name}: raw capture {done}")
+    return missing

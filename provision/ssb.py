@@ -1,7 +1,8 @@
 """Deploy the Horus Flink jobs through SQL Stream Builder (REST v2).
 
-Two jobs, one SQL template each: ssb/02_kafka_to_iceberg.sql (the lakehouse
-writer) and ssb/04_detections.sql (alerts to the alerts topic).
+Three jobs, one SQL template each: ssb/02_kafka_to_iceberg.sql (the lakehouse
+writer), ssb/04_detections.sql (alerts to the alerts topic) and
+ssb/05_raw_to_iceberg.sql (raw responses to the bronze table, burndown 17).
 
 Talks to the Streaming Analytics Data Hub's Knox ``cdp-proxy-api`` SSB endpoint
 with the workload user's basic-auth credentials. Idempotent: the project and
@@ -20,6 +21,7 @@ import requests
 SSB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ssb")
 SQL_TEMPLATE = os.path.join(SSB_DIR, "02_kafka_to_iceberg.sql")
 DETECTIONS_TEMPLATE = os.path.join(SSB_DIR, "04_detections.sql")
+RAW_TEMPLATE = os.path.join(SSB_DIR, "05_raw_to_iceberg.sql")
 HEALTHY = ("INITIALIZING", "CREATED", "RUNNING", "RESTARTING", "RECONCILING")
 
 

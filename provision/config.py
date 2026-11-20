@@ -97,6 +97,19 @@ class Config:
         return f"horus-{self.instance}-feeds-gateway"
 
     @property
+    def raw_topic(self) -> str:
+        """Every upstream response as received (burndown 17)."""
+        return f"horus-{self.instance}-raw"
+
+    @property
+    def raw_job(self) -> str:
+        return f"horus_{self.instance}_raw_to_iceberg"
+
+    @property
+    def raw_group(self) -> str:
+        return f"horus-{self.instance}-raw"
+
+    @property
     def maintenance_job(self) -> str:
         return f"horus-{self.instance}-lake-maintenance"
 

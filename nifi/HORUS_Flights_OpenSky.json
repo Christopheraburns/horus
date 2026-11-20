@@ -719,6 +719,214 @@
         "maxBackoffPeriod": "10 mins",
         "componentType": "PROCESSOR",
         "groupIdentifier": "96c40c82-b631-5e4c-b856-a0807425acbc"
+      },
+      {
+        "identifier": "d98b8a75-510a-425c-a9fe-a8fa5769da8f",
+        "instanceIdentifier": "6b024bd4-e0c3-4937-9020-0dac3410bfd9",
+        "name": "Publish raw response",
+        "comments": "Burndown 17: the upstream response as received, to the raw topic and the bronze table. Failures are dropped so they never hold up the events path.",
+        "position": {
+          "x": 266.0,
+          "y": -200.0
+        },
+        "type": "org.apache.nifi.kafka.processors.PublishKafka",
+        "bundle": {
+          "group": "org.apache.nifi",
+          "artifact": "nifi-kafka-nar",
+          "version": "2.6.0.4.12.0.0-914"
+        },
+        "properties": {
+          "compression.type": "gzip",
+          "acks": "all",
+          "Message Demarcator": null,
+          "Kafka Key Attribute Encoding": "utf-8",
+          "Record Reader": null,
+          "Record Metadata Strategy": "FROM_PROPERTIES",
+          "Transactional ID Prefix": null,
+          "Header Encoding": "UTF-8",
+          "max.request.size": "32 MB",
+          "Topic Name": "#{kafka.raw.topic}",
+          "Kafka Key": "opensky",
+          "partition": null,
+          "Kafka Connection Service": "e4fb5fba-69a2-5e7c-b4cd-8a43d12ef2c6",
+          "Publish Strategy": "USE_VALUE",
+          "Record Key Writer": null,
+          "Failure Strategy": "Route to Failure",
+          "partitioner.class": "org.apache.kafka.clients.producer.internals.DefaultPartitioner",
+          "Record Writer": null,
+          "Transactions Enabled": "false",
+          "Message Key Field": null,
+          "FlowFile Attribute Header Pattern": "invokehttp\\.status\\.code|invokehttp\\.request\\.url|mime\\.type"
+        },
+        "propertyDescriptors": {
+          "compression.type": {
+            "name": "compression.type",
+            "displayName": "Compression Type",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "acks": {
+            "name": "acks",
+            "displayName": "Delivery Guarantee",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Message Demarcator": {
+            "name": "Message Demarcator",
+            "displayName": "Message Demarcator",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Kafka Key Attribute Encoding": {
+            "name": "Kafka Key Attribute Encoding",
+            "displayName": "Kafka Key Attribute Encoding",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Record Reader": {
+            "name": "Record Reader",
+            "displayName": "Record Reader",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Record Metadata Strategy": {
+            "name": "Record Metadata Strategy",
+            "displayName": "Record Metadata Strategy",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Transactional ID Prefix": {
+            "name": "Transactional ID Prefix",
+            "displayName": "Transactional ID Prefix",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Header Encoding": {
+            "name": "Header Encoding",
+            "displayName": "Header Encoding",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "max.request.size": {
+            "name": "max.request.size",
+            "displayName": "Max Request Size",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Topic Name": {
+            "name": "Topic Name",
+            "displayName": "Topic Name",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Kafka Key": {
+            "name": "Kafka Key",
+            "displayName": "Kafka Key",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "partition": {
+            "name": "partition",
+            "displayName": "Partition",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Kafka Connection Service": {
+            "name": "Kafka Connection Service",
+            "displayName": "Kafka Connection Service",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Publish Strategy": {
+            "name": "Publish Strategy",
+            "displayName": "Publish Strategy",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Record Key Writer": {
+            "name": "Record Key Writer",
+            "displayName": "Record Key Writer",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Failure Strategy": {
+            "name": "Failure Strategy",
+            "displayName": "Failure Strategy",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "partitioner.class": {
+            "name": "partitioner.class",
+            "displayName": "Partitioner Class",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Record Writer": {
+            "name": "Record Writer",
+            "displayName": "Record Writer",
+            "identifiesControllerService": true,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Transactions Enabled": {
+            "name": "Transactions Enabled",
+            "displayName": "Transactions Enabled",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "Message Key Field": {
+            "name": "Message Key Field",
+            "displayName": "Message Key Field",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          },
+          "FlowFile Attribute Header Pattern": {
+            "name": "FlowFile Attribute Header Pattern",
+            "displayName": "FlowFile Attribute Header Pattern",
+            "identifiesControllerService": false,
+            "sensitive": false,
+            "dynamic": false
+          }
+        },
+        "style": {},
+        "schedulingPeriod": "0 sec",
+        "schedulingStrategy": "TIMER_DRIVEN",
+        "executionNode": "ALL",
+        "penaltyDuration": "30 sec",
+        "yieldDuration": "1 sec",
+        "bulletinLevel": "WARN",
+        "runDurationMillis": 0,
+        "concurrentlySchedulableTaskCount": 1,
+        "autoTerminatedRelationships": [
+          "success",
+          "failure"
+        ],
+        "scheduledState": "ENABLED",
+        "retryCount": 10,
+        "retriedRelationships": [],
+        "backoffMechanism": "PENALIZE_FLOWFILE",
+        "maxBackoffPeriod": "10 mins",
+        "componentType": "PROCESSOR",
+        "groupIdentifier": "96c40c82-b631-5e4c-b856-a0807425acbc"
       }
     ],
     "inputPorts": [],
@@ -933,6 +1141,42 @@
         "backPressureObjectThreshold": 10000,
         "backPressureDataSizeThreshold": "1 GB",
         "flowFileExpiration": "0 sec",
+        "prioritizers": [],
+        "bends": [],
+        "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+        "partitioningAttribute": "",
+        "loadBalanceCompression": "DO_NOT_COMPRESS",
+        "componentType": "CONNECTION",
+        "groupIdentifier": "96c40c82-b631-5e4c-b856-a0807425acbc"
+      },
+      {
+        "identifier": "1a32ca0e-e9cd-4fdb-9535-8dd4a75fdfb0",
+        "instanceIdentifier": "5a9f869b-0426-479b-9709-77e3f15e1394",
+        "name": "raw",
+        "source": {
+          "id": "0d6ed04e-ee2f-5667-b88f-2eb904e71287",
+          "type": "PROCESSOR",
+          "groupId": "96c40c82-b631-5e4c-b856-a0807425acbc",
+          "name": "Get OpenSky states",
+          "comments": "",
+          "instanceIdentifier": "3c8750b9-8378-5a3c-887e-23b42e215949"
+        },
+        "destination": {
+          "id": "d98b8a75-510a-425c-a9fe-a8fa5769da8f",
+          "type": "PROCESSOR",
+          "groupId": "96c40c82-b631-5e4c-b856-a0807425acbc",
+          "name": "Publish raw response",
+          "comments": "",
+          "instanceIdentifier": "6b024bd4-e0c3-4937-9020-0dac3410bfd9"
+        },
+        "labelIndex": 0,
+        "zIndex": 3,
+        "selectedRelationships": [
+          "Response"
+        ],
+        "backPressureObjectThreshold": 100000,
+        "backPressureDataSizeThreshold": "4 GB",
+        "flowFileExpiration": "3 min",
         "prioritizers": [],
         "bends": [],
         "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
@@ -1248,6 +1492,13 @@
           "description": "OpenSky API client secret (Flights OpenSky flow)",
           "sensitive": true,
           "provided": false
+        },
+        {
+          "name": "kafka.raw.topic",
+          "description": "Topic for raw upstream responses",
+          "sensitive": false,
+          "provided": false,
+          "value": "horus-raw"
         }
       ],
       "inheritedParameterContexts": [],

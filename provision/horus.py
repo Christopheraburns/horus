@@ -329,6 +329,8 @@ def deploy_data_plane(cfg: cfgmod.Config, rep: Report, start_flows: bool) -> int
             try:
                 kafka_admin.ensure_topic(brokers, user, pw, ca, cfg.topic)
                 kafka_admin.ensure_topic(brokers, user, pw, ca, cfg.alerts_topic)
+                kafka_admin.ensure_topic(brokers, user, pw, ca, cfg.raw_topic,
+                                         config=kafka_admin.RAW_TOPIC_CONFIG)
                 kafka_ok = True
             except Exception as e:  # noqa: BLE001
                 print(f"kafka: FAILED: {e}")
@@ -337,11 +339,15 @@ def deploy_data_plane(cfg: cfgmod.Config, rep: Report, start_flows: bool) -> int
             print("kafka: hub not AVAILABLE yet; topic skipped")
 
         lake_version = None   # None: unknown (not Trino, or it failed)
+        raw_table_ok = False
         if rep.gateway_env.get("LAKE_ENGINE") == "trino":
             import lake
             try:
                 lake_version = lake.ensure_table(rep.gateway_env["HIVE_HOST"], int(rep.gateway_env["HIVE_PORT"]), user, pw,
                                   cfg.lake_catalog, cfg.database, cfg.table)
+                lake.ensure_raw_table(rep.gateway_env["HIVE_HOST"], int(rep.gateway_env["HIVE_PORT"]), user, pw,
+                                      cfg.lake_catalog, cfg.database)
+                raw_table_ok = True
             except Exception as e:  # noqa: BLE001
                 print(f"lake: FAILED: {e}")
                 failures += 1
@@ -355,6 +361,7 @@ def deploy_data_plane(cfg: cfgmod.Config, rep: Report, start_flows: bool) -> int
                 "kafka.sasl.username": (user, False, "CDP workload user name"),
                 "kafka.sasl.password": (pw, True, "CDP workload password"),
                 "kafka.topic": (cfg.topic, False, "Topic all feeds publish to"),
+                "kafka.raw.topic": (cfg.raw_topic, False, "Topic for raw upstream responses (burndown 17)"),
                 "aisstream.api.key": (cfg.aisstream_api_key or "", False, "aisstream.io API key (vessels flow only)"),
                 "http.contact": (cfg.http_contact or "", False, "Contact sent in the User-Agent to adsb.lol and NWS"),
                 "opensky.client.id": (cfg.opensky_client_id or "", False,
@@ -366,6 +373,8 @@ def deploy_data_plane(cfg: cfgmod.Config, rep: Report, start_flows: bool) -> int
                 n = nifimod.NiFi(rep.nifi_api, user, pw, verify=ca)
                 nifimod.deploy(n, cfg.instance, cfg.parameter_context, params,
                                start=start_flows and kafka_ok, optional=cfg.optional_flows)
+                # Flows imported before burndown 17 get the raw branch in place.
+                nifimod.add_raw_capture(n, cfg.instance, apply=kafka_ok, optional=cfg.optional_flows)
             except Exception as e:  # noqa: BLE001
                 print(f"nifi: FAILED: {e}")
                 failures += 1
@@ -398,6 +407,17 @@ def deploy_data_plane(cfg: cfgmod.Config, rep: Report, start_flows: bool) -> int
             except Exception as e:  # noqa: BLE001
                 print(f"ssb: detections FAILED: {e}")
                 failures += 1
+            if raw_table_ok:
+                try:   # the bronze writer (burndown 17.4)
+                    ssbmod.deploy(s, cfg.ssb_project, cfg.database, lake.RAW_TABLE, cfg.raw_job,
+                                  {"TOPIC": cfg.raw_topic, "GROUP_ID": cfg.raw_group, "BROKERS": ",".join(brokers),
+                                   "KAFKA_USER": user, "KAFKA_PASSWORD": pw},
+                                  template=ssbmod.RAW_TEMPLATE)
+                except Exception as e:  # noqa: BLE001
+                    print(f"ssb: raw capture job FAILED: {e}")
+                    failures += 1
+            else:
+                print("ssb: raw capture job skipped: the bronze table isn't ready")
         else:
             print("ssb: Flink hub not AVAILABLE or Kafka topic not ready; job skipped")
 
@@ -421,7 +441,8 @@ def check_data_plane(cfg: cfgmod.Config, rep: Report) -> None:
         if _ready(rep.hubs.get("kafka")) and brokers:
             import kafka_admin
             try:
-                for label, topic in (("kafka topic", cfg.topic), ("alerts topic", cfg.alerts_topic)):
+                for label, topic in (("kafka topic", cfg.topic), ("alerts topic", cfg.alerts_topic),
+                                     ("raw topic", cfg.raw_topic)):
                     n = kafka_admin.topic_partitions(brokers, user, pw, ca, topic)
                     rep.add(label, OK if n else TODO,
                             f"{topic} ({n} partitions)" if n else f"{topic} missing; run create --yes")
@@ -441,6 +462,11 @@ def check_data_plane(cfg: cfgmod.Config, rep: Report) -> None:
                 else:
                     rep.add("lake table", OK if n else WARN,
                             f"{fq} {n} rows" + ("" if n else " -- empty until the Flink job runs"))
+                rn = lake.table_rows(rep.gateway_env["HIVE_HOST"], int(rep.gateway_env["HIVE_PORT"]),
+                                     user, pw, cfg.lake_catalog, cfg.database, lake.RAW_TABLE)
+                rep.add("bronze table", TODO if rn is None else (OK if rn else WARN),
+                        f"{cfg.database}.{lake.RAW_TABLE} " + ("missing; run create --yes" if rn is None
+                        else f"{rn} rows" + ("" if rn else " -- empty until the raw capture job runs")))
             except Exception as e:  # noqa: BLE001
                 msg = str(e)
                 if "401" in msg or "Invalid credentials" in msg:
@@ -476,7 +502,8 @@ def check_data_plane(cfg: cfgmod.Config, rep: Report) -> None:
             try:
                 s = ssbmod.SSB(rep.ssb_api, user, pw, verify=ca)
                 pid = next((p["id"] for p in s._req("GET", "/projects") if p["name"] == cfg.ssb_project), None)
-                for label, name in (("flink job", cfg.flink_job), ("detections job", cfg.detections_job)):
+                for label, name in (("flink job", cfg.flink_job), ("detections job", cfg.detections_job),
+                                    ("raw capture job", cfg.raw_job)):
                     job = s.job(pid, name) if pid else None
                     if job is None:
                         rep.add(label, TODO, f"{name} not submitted; run create --yes")
@@ -576,6 +603,12 @@ def maintain_lake(cfg: cfgmod.Config, rep: Report, apply: bool) -> int:
         return cur.fetchall()
 
     lake_maintenance.maintain(run, f"{cfg.lake_catalog}.{cfg.database}.{cfg.table}", apply)
+    # The bronze table (burndown 17.5), once it exists.
+    if lake.table_rows(host, port, cfg.workload_user, cfg.workload_password, cfg.lake_catalog,
+                       cfg.database, lake.RAW_TABLE) is not None:
+        keep = int(os.environ.get("RAW_RETENTION_DAYS", lake_maintenance.RAW_RETENTION_DAYS))
+        lake_maintenance.maintain(run, f"{cfg.lake_catalog}.{cfg.database}.{lake.RAW_TABLE}", apply,
+                                  time_col="received_at", retain_days=keep)
     if not apply:
         print("\nDry run. Re-run with --yes to apply (that also creates the daily Job if it's missing).")
         return 0
@@ -697,11 +730,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         print("\nPlan:")
         for h in rep.planned_hubs:
             print(f"  create Data Hub {h['name']}  <- '{h['definition']}'  (billable)")
-        print(f"  ensure topics {cfg.topic} and {cfg.alerts_topic}, table {cfg.lake_catalog}.{cfg.database}.{cfg.table}, "
+        print(f"  ensure topics {cfg.topic}, {cfg.alerts_topic} and {cfg.raw_topic}, "
+              f"tables {cfg.lake_catalog}.{cfg.database}.{cfg.table} and raw_responses, "
               f"NiFi context {cfg.parameter_context} + "
               f"{len(nifimod.load_flows(cfg.instance, cfg.parameter_context, cfg.optional_flows))} flows"
               + ("" if args.no_start else " (started once Kafka is up)"))
-        print(f"  ensure SSB project {cfg.ssb_project}, Flink jobs {cfg.flink_job} and {cfg.detections_job}")
+        print(f"  add raw capture to imported flows that lack it (burndown 17)")
+        print(f"  ensure SSB project {cfg.ssb_project}, Flink jobs {cfg.flink_job}, {cfg.detections_job} "
+              f"and {cfg.raw_job}")
         print(f"  ensure Workbench Job {cfg.maintenance_job} (daily lake maintenance at {MAINTENANCE_SCHEDULE} UTC)")
         if not args.yes:
             print("\nDry run. Re-run with --yes to apply.")

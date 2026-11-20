@@ -99,8 +99,10 @@ anything that already exists is skipped.
 
 ## 4. Kafka topic
 
-`create --yes` creates `horus-<instance>-events` (every feed) and
-`horus-<instance>-alerts` (detections), each with 3 partitions.
+`create --yes` creates `horus-<instance>-events` (every feed),
+`horus-<instance>-alerts` (detections) and `horus-<instance>-raw` (every upstream
+response as received, for the bronze table: 16 MB messages, 3 days' retention),
+each with 3 partitions.
 
 If you are not allowed to create topics, the provisioner prints the Ranger
 Kafka policy you need.
@@ -111,6 +113,12 @@ Kafka policy you need.
 Trino virtual warehouse: lake schema v2 ([LAKE-SCHEMA.md](LAKE-SCHEMA.md)),
 Iceberg format v2, Parquet with zstd, partitioned by day and sorted by map tile.
 The table stays empty until the Flink job is running.
+
+It also creates the bronze table `raw_responses` beside it: every upstream
+response as NiFi received it, kept 30 days (`RAW_RETENTION_DAYS` on the
+maintenance Job), so `events` can be rebuilt after a NiFi script bug
+([LAKE-SCHEMA.md](LAKE-SCHEMA.md#raw-capture-the-bronze-table-burndown-17)). Its
+Flink job is `horus_<instance>_raw_to_iceberg`.
 
 If the provisioner says the table's codec is not zstd and Trino cannot change it,
 run the Impala statement it prints once.
@@ -140,12 +148,16 @@ create it by hand.
 
 ## 6. NiFi flows
 
-`create --yes` does four things here:
+`create --yes` does five things here:
 
 1. Creates the `Horus-<instance>` parameter context.
 2. Imports the feed flows (one per `nifi/HORUS_*.json`).
 3. Enables their controller services.
 4. Starts the flows, but only if the Kafka topic step succeeded.
+5. Adds the raw capture branch to flows imported before it existed: a second
+   PublishKafka, "Publish raw response", fed from the same response as the
+   transform, to the raw topic. It's added through the NiFi API, so the flow's
+   state and queues are kept, and started if the flow is running.
 
 Flights come from two flows:
 
@@ -157,7 +169,8 @@ Flights come from two flows:
 When both run, they publish to the same topic. The live map keeps the newest position per
 aircraft. The lake keeps both, tagged by `source_provider`.
 
-Re-running `create --yes` doesn't change flows that already exist in NiFi.
+Re-running `create --yes` doesn't change flows that already exist in NiFi, apart
+from adding the raw capture branch where it's missing.
 
 - **A changed transform script** (`nifi/scripts/`): run
   `python provision/horus.py update-scripts` to see which flows differ, then
@@ -184,6 +197,12 @@ error but never matches, so access is still denied.
 | Hadoop SQL (`cm_hive`) | database `horus_<instance>`, table `*`, column `*` | `ssb` | All | SSB reads the table definition from the metastore. |
 | S3 (`cm_s3`) | the warehouse bucket, path `/data/warehouse/tablespace/external/hive/horus_<instance>.db`, recursive | your workload user and `ssb` | read, write | The environment uses RAZ, so S3 access is decided by Ranger. SSB (as `ssb`) reads the table metadata when it plans the job, and the job (as you) writes the data files. |
 | S3 (`cm_s3`) | the storage bucket, path `/data/horus/<instance>/tiles`, recursive | the workload user who owns the tile server Application | read | The tile server reads the imagery from the bucket, each byte range signed by RAZ as the Application's user ([services/tileserver/README.md](../services/tileserver/README.md)). Read only: imagery is added by an admin (below), never by the service. |
+
+Both lake policies are on the whole `horus_<instance>` database, so they also
+cover the bronze table `raw_responses`. Keep it that way: bronze is source data
+with no marking columns, so only the workload user and `ssb` should read it.
+Analysts, agents and the UI read `events` and, later, the ontology; never grant
+them the database, only `events_iceberg` (burndown 17.7).
 
 ### Imagery files
 
