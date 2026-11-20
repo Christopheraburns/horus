@@ -150,7 +150,6 @@ export default function Dashboard() {
     radiation: false,
     infrastructure: false,
     global_incidents: false,
-    war_alerts: false,
     gps_jamming: false,
     day_night: false,
     cables: false,

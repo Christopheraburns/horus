@@ -108,7 +108,6 @@ PIPELINE mode suppresses them in the browser, but S1 still calls some of them.
 | `/api/malware` | `feodotracker.abuse.ch`, `urlhaus.abuse.ch`, `ip-api.com` |
 | `/api/cyber-threats` | `cisa.gov`, `dashboard.shadowserver.org` |
 | `/api/radar` | IODA (`api.ioda.inetintel.cc.gatech.edu`) |
-| `/api/frontlines` | `deepstatemap.live` |
 | `/api/air-quality` | `api.openaq.org` |
 | `/api/sentinel` | Copernicus, Element 84 (AWS) |
 | `/api/crypto` | `api.coingecko.com` (only used by an unmounted component) |

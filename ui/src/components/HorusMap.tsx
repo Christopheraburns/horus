@@ -271,7 +271,7 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
       createFlame(map, 'fire-flame');
       createDot(map, 'dot-cctv', cameraColor, 10);
 
-      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','sigint-news', 'war-alerts-targets', 'war-alerts-lines', 'balloons', 'radiation', 'malware-nodes', 'network-mesh', 'timetravel'];
+      const sources = ['flights','military','jets','private-fl','satellites','earthquakes','gdelt','gps-jamming','day-night','cctv','fires','weather','infrastructure','maritime','maritime-choke','maritime-ships','live-news','sigint-news', 'balloons', 'radiation', 'malware-nodes', 'network-mesh', 'timetravel'];
       sources.forEach(s => map.addSource(s, { type: 'geojson', data: EMPTY_FC }));
 
 
