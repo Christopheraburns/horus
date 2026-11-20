@@ -382,7 +382,7 @@ never through a browser upload or the Workbench project.
 
 | ID | Item | Done when | Est | Status |
 |---|---|---|---|---|
-| E1 | Convert the 7 MBTiles to PMTiles and check them: `scripts/to_pmtiles.sh` | The script ends with "All 7 files converted and checked" | 1 | Todo |
+| E1 | Convert the 7 MBTiles to PMTiles and check them: `scripts/to_pmtiles.sh` | The script ends with "All 7 files converted and checked" | 1 | Done (2026-11-19) |
 | E2 | Copy the 7 PMTiles and their `SHA256SUMS` to `<storage-base>/data/horus/<instance>/tiles/` with the AWS CLI | All 8 files listed in the bucket with the right sizes; the tile service's checks pass on them once it reads the bucket (Horus 8.9) | 1 | Todo |
 
 #### E1: how to run it
