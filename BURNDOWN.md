@@ -67,6 +67,7 @@ BURNDOWN-DEPLOY A1 and A2.
 | 6.7 | Playback and clips: from an alert or a track point, open the nearest camera's recording at that time | An alert opens a clip from the right time | 3 | Todo |
 | 6.3 | AI Analyze (YOLOX-nano in the browser, model file self-hosted); Identify routed to Mistral through the gateway | Works with no browser key | 4 | Todo |
 | 6.4 | Flights: airframe identity, flown tracks (from the lake), multi-aircraft watch. Watch list: simple store now, moved to an ontology object changed by an action in O14 | Ported | 6 | Todo |
+| 6.8 | Zoom-dependent symbols (raised 2026-11-20): aircraft icons and vessel dots scale only 0.4x to 1x (2 to 6 px) from zoom 1 to 10 and may overlap, so at world zoom they pile into blobs. Far out (world, continent) draw density instead (tiny dots or a heat layer: where the traffic is), and switch to the directional icons from about zoom 5 or 6, scaled up steeply. Don't declutter by hiding overlaps (it silently drops aircraft). Do with 10.4 (commercial aircraft thinned 10x) | Traffic lanes readable at world zoom; individual aircraft and ships with heading from about zoom 6 | 2 | Todo |
 
 ## 7. Air-gap readiness (PIPELINE mode with no internet calls)
 
@@ -156,7 +157,7 @@ so flights also come from OpenSky. Both flows publish to the same topic.
 |---|---|---|---|---|
 | 10.1 | Popups show LAST UPDATE for aircraft and vessels; positions older than 15 min are drawn faded and marked STALE | Visible in both SOURCE modes | 2 | Done |
 | 10.2 | Gateway cutoffs per feed: aircraft 25 min, moving ships 20 min, ships at anchor 60 min, others 60 min (settings in INSTALL.md); every item carries `age_s` | Tested with a fake clock | 2 | Done |
-| 10.3 | Dead reckoning: estimate a moving ship's (or aircraft's) current position from its last speed and heading, drawn as an estimate (for example a dashed line from the last fix) | Estimated positions shown and labelled | 4 | Todo |
+| 10.3 | Dead reckoning: estimate a moving ship's (or aircraft's) current position from its last speed and course, drawn as an estimate (for example fainter, with a dashed line from the last fix), updated every second or so and stopped after a set age (minutes for aircraft, longer for ships) so a stale guess never looks like a fix. Found 2026-11-20: the UI already polls every 30 s (aircraft) and 10 s (vessels) while the tab is visible (paused in a background tab), but in PIPELINE mode on AWS aircraft positions only change every 12 min (adsb.lol, the only flight source there), so aircraft sit still and jump; vessels move (aisstream live, hormuz.now 30 s). A faster flight feed is section 9 | Estimated positions shown and labelled; aircraft move between adsb.lol polls | 4 | Todo |
 | 10.4 | Commercial aircraft are thinned 10x before drawing (upstream OSIRIS performance shortcut in `HorusMap` `toFeatures(..., 10)`); review now that counts are lower | Decision made; thinning removed or zoom-dependent | 1 | Todo |
 
 ## 11. AI answers (Ask Horus, Pattern of Life)
