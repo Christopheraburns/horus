@@ -675,11 +675,15 @@ def model_command(cfg: cfgmod.Config, rep: Report, command: str) -> int:
                                       cfg.lake_catalog, cfg.database, cfg.workload_user, model if key else None)
     env = semantic.env(cfg.workload_password, key, os.environ.get("MISTRAL_BASE_URL") or os.environ.get("LLM_BASE_URL"))
     import lake
-    if command == "model-propose":
-        semantic.propose(config, env, lake.views_database(cfg.database))
-        print("\nReview semantic/horus_lake/PROPOSAL.md, record the decisions in review.json, then model-publish.")
-    else:
-        semantic.publish(config, env, cfg.workload_user)
+    try:
+        if command == "model-propose":
+            semantic.propose(config, env, lake.views_database(cfg.database))
+            print("\nReview semantic/horus_lake/PROPOSAL.md, record the decisions in review.json, then model-publish.")
+        else:
+            semantic.publish(config, env, cfg.workload_user)
+    except RuntimeError as e:     # Helios says what is wrong in one line; no traceback on top
+        print(f"model: {e}")
+        return 1
     return 0
 
 

@@ -653,10 +653,18 @@
    "note": "Duplicates the knots metric."
   },
   "horus_dev_views.aircraft_positions::Average speed (knots)": {
-   "decision": "accept"
+   "decision": "edit",
+   "overrides": {
+    "name": "Average aircraft speed (knots)"
+   },
+   "note": "Metric names are unique across the model; aircraft and vessels both had this one."
   },
   "horus_dev_views.aircraft_positions::Maximum speed (knots)": {
-   "decision": "accept"
+   "decision": "edit",
+   "overrides": {
+    "name": "Maximum aircraft speed (knots)"
+   },
+   "note": "Metric names are unique across the model; aircraft and vessels both had this one."
   },
   "horus_dev_views.aircraft_positions::Position observations": {
    "decision": "accept"
@@ -699,10 +707,18 @@
    "note": "Duplicates the knots metric."
   },
   "horus_dev_views.vessel_positions::Average speed (knots)": {
-   "decision": "accept"
+   "decision": "edit",
+   "overrides": {
+    "name": "Average vessel speed (knots)"
+   },
+   "note": "Metric names are unique across the model; aircraft and vessels both had this one."
   },
   "horus_dev_views.vessel_positions::Maximum speed (knots)": {
-   "decision": "accept"
+   "decision": "edit",
+   "overrides": {
+    "name": "Maximum vessel speed (knots)"
+   },
+   "note": "Metric names are unique across the model; aircraft and vessels both had this one."
   },
   "horus_dev_views.vessel_positions::Position reports": {
    "decision": "accept"

@@ -31,7 +31,7 @@ SOURCE_ID = "lake"
 CONNECTION = "lake"
 # Helios pinned to a commit, installed from git into the session (O0c bakes it into the runtime).
 HELIOS_REPO = "https://github.com/Christopheraburns/helios"
-HELIOS_COMMIT = "1d4d522"   # Track H to H.11 (reasoning models: max_tokens, reasoning_effort)
+HELIOS_COMMIT = "fb69dab"   # Track H to H.13 (one-line errors from python -m)
 HELIOS_PACKAGES = (("helios-cortex", "[trino,llm]"), ("helios-model", ""))
 
 
@@ -108,7 +108,9 @@ def _stage(config: str, extra_env: Dict[str, str], log, *args: str) -> list:
         if line.strip() and not line.startswith("WARNING"):
             log(f"  {line}")
     if r.returncode:
-        raise RuntimeError(f"helios {args[0]} failed: {(r.stderr or r.stdout).strip()[-600:]}")
+        lines = [l for l in (r.stderr or r.stdout).strip().splitlines() if l.strip()]
+        error = next((l for l in reversed(lines) if l.startswith("helios: error:")), lines[-1] if lines else "")
+        raise RuntimeError(f"helios {args[0]} failed: {error.removeprefix('helios: error: ')}")
     return r.stdout.splitlines()
 
 
