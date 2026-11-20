@@ -127,7 +127,9 @@ def file_reader(path: str) -> Callable[[int, int], bytes]:
     return read
 
 
-def read_pmtiles(read: Callable[[int, int], bytes]) -> tuple[dict, list]:
+def read_pmtiles(read: Callable[[int, int], bytes], size: Optional[int] = None) -> tuple[dict, list]:
+    """``size``: the file's length, when known; a file shorter than its header says is
+    truncated (an incomplete upload) and its tiles would be served from the wrong bytes."""
     head = read(0, PMTILES_HEADER)
     if len(head) < PMTILES_HEADER or head[:7] != b"PMTiles":
         return {}, ["not a PMTiles file (no PMTiles header)"]
@@ -138,6 +140,11 @@ def read_pmtiles(read: Callable[[int, int], bytes]) -> tuple[dict, list]:
     minzoom, maxzoom = head[100], head[101]
     w, s, e, n = (v / 1e7 for v in struct.unpack_from("<iiii", head, 102))
     problems: list = []
+    # Header sections: root directory, metadata, leaf directories, tile data (offset, length).
+    end = max(o + n for o, n in (struct.unpack_from("<QQ", head, at) for at in (8, 24, 40, 56)))
+    if size is not None and size < end:
+        return {}, [f"truncated: the file is {size:,} bytes but its header says {end:,} "
+                    f"({end - size:,} missing; an incomplete upload?)"]
     meta: dict = {"format": PMTILES_TILE_TYPES.get(tile_type), "minzoom": minzoom, "maxzoom": maxzoom,
                   "bounds": [w, s, e, n]}
     if meta["format"] is None:
@@ -174,7 +181,7 @@ def read_metadata(path: str) -> tuple[dict, list]:
         if os.path.getsize(path) == 0:
             return {}, ["empty file"]
         if path.lower().endswith(".pmtiles"):
-            return read_pmtiles(file_reader(path))
+            return read_pmtiles(file_reader(path), os.path.getsize(path))
         return read_mbtiles(path)
     except OSError as e:
         return {}, [f"unreadable ({e})"]

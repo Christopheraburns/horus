@@ -66,8 +66,9 @@ for name in ("corrupt", "nothing-here"):
     if status != 404:
         failures.append(f"proxy /{name}.pmtiles: HTTP {status} (expected 404: not a served tile set)")
 
-for expected in ("store s3a://horus-test/data/horus/test/tiles/: 5 object(s)",
+for expected in ("store s3a://horus-test/data/horus/test/tiles/: 6 object(s)",
                  "SKIP corrupt (corrupt.pmtiles)",
+                 "SKIP horus-imagery-channel (horus-imagery-channel.pmtiles): truncated:",
                  "SKIP horus-imagery-crimea (horus-imagery-crimea.mbtiles): MBTiles can't be read from object storage",
                  "signing proxy on 127.0.0.1:18503: 2 tile file(s)"):
     if expected not in log:

@@ -30,6 +30,8 @@ for src, name in [("out/store/horus-imagery-global.pmtiles", "horus-imagery-glob
                   ("out/store/horus-imagery-crimea.mbtiles", "horus-imagery-crimea.mbtiles")]:
     c.upload_file(src, "horus-test", p + name)
 c.put_object(Bucket="horus-test", Key=p + "SHA256SUMS", Body=b"x")
+whole = open("out/store/horus-imagery-global.pmtiles", "rb").read()        # a part missing, as on 2026-11-20
+c.put_object(Bucket="horus-test", Key=p + "horus-imagery-channel.pmtiles", Body=whole[:-1000])
 c.put_object(Bucket="horus-test", Key=p + "old/horus-imagery-bosporus.pmtiles", Body=b"x")   # not listed
 PY
 (cd .. && CDSW_APP_PORT=18501 TILESERVER_PUBLIC_URL=http://localhost:18501/ \

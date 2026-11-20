@@ -138,7 +138,7 @@ def probe(url: str) -> int:
     for key, size in pmtiles:
         t = time.perf_counter()
         try:
-            meta, problems = tilestore.read_pmtiles(b.reader(key))
+            meta, problems = tilestore.read_pmtiles(b.reader(key), size)
         except Exception as e:
             meta, problems = {}, [f"{type(e).__name__}: {e}"]
         ms = (time.perf_counter() - t) * 1000

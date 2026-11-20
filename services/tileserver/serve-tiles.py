@@ -93,7 +93,7 @@ for store in stores:
             if ext.lower() != ".pmtiles":
                 continue
             try:
-                meta, problems = tilestore.read_pmtiles(b.reader(key))
+                meta, problems = tilestore.read_pmtiles(b.reader(key), size)
             except Exception as e:   # noqa: BLE001
                 meta, problems = {}, [f"unreadable ({type(e).__name__}: {e})"]
             if problems:
