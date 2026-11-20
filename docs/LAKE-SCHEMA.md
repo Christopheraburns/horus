@@ -11,8 +11,8 @@ and expires snapshots and orphan files after 7 days.
 Rules:
 
 - **One generic table.** No resolved entity ids and no entity attributes: the
-  ontology owns those (ONTOLOGY_PLAN.md). Typed views per asset type come later
-  from the Helios semantic model (O0b).
+  ontology owns those ([ONTOLOGY.md](ONTOLOGY.md)). Typed views per asset type are
+  the views in `horus_<instance>_views`, which the Helios semantic model covers (O0b).
 - **Flink stays generic.** The lake job reads named envelope fields and nothing
   feed-specific. Anything that writes the envelope to the events topic can feed
   Horus (DEPLOYMENT-MODEL.md), so meaning has to be in the envelope, not in
