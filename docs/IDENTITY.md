@@ -56,7 +56,8 @@ must work for both.
 
 ### Identity key fields
 
-The plan's four fields, plus `exclusive`, proposed here:
+The plan's four fields, plus `exclusive` and `concurrencyWindow` (accepted
+2026-11-20 and added to the plan):
 
 | Field | Values | Meaning | Horus | Car plant |
 |---|---|---|---|---|
@@ -64,8 +65,8 @@ The plan's four fields, plus `exclusive`, proposed here:
 | `strength` | `strong`, `weak` | A strong match links on its own; a weak match only proposes | MMSI strong, name weak | VIN strong, supplier name weak |
 | `scope` | `global`, or the property that qualifies it | Where a value is unique | global | a lot number per supplier |
 | `validity` | `permanent`, `reassignable` | Whether a value can move to another instance over time | an MMSI is reissued | a serial never moves |
-| `exclusive` (**proposed**) | `true` (default), `false` | Whether a value names at most one instance *at any moment*. `reassignable` covers a value moving over time, not two instances using it at once | an MMSI shared by two ships | one serial printed on two parts |
-| `concurrencyWindow` (**proposed**, with `exclusive`) | a duration | How close in time two claims of an exclusive value must be to count as "at once" | set by the pack | set by the pack |
+| `exclusive` | `true` (default), `false` | Whether a value names at most one instance *at any moment*. `reassignable` covers a value moving over time, not two instances using it at once | an MMSI shared by two ships | one serial printed on two parts |
+| `concurrencyWindow` | a duration | How close in time two claims of an exclusive value must be to count as "at once" | set by the pack | set by the pack |
 
 "At once" also needs a plausibility test: could one instance have made both
 observations? For types that implement `Located`, the core compares the implied
@@ -108,8 +109,8 @@ contest.
 
 ### Open questions for the plan
 
-1. Accept `exclusive` and `concurrencyWindow` as identity key fields (O2), or
-   express "at once" some other way?
+1. ~~Accept `exclusive` and `concurrencyWindow` as identity key fields (O2)?~~
+   Accepted 2026-11-20.
 2. Where source trust is declared: on the source in the extension (proposed:
    `vouchesFor: [scheme, ...]`), or as a policy?
 

@@ -216,6 +216,10 @@ An entity type declares how its instances are recognised, so entity resolution a
 | `strength` | `strong`: a match links on its own; `weak`: a match only proposes | MMSI and IMO strong; name weak | VIN and serial strong; supplier name weak |
 | `scope` | Where the value is unique | global | per supplier for a lot number |
 | `validity` | Whether a value can move to another instance over time | MMSI can be reassigned | serials never move |
+| `exclusive` | Whether a value names at most one instance at any moment (default true); two instances claiming it at once is a conflict, not a merge | an MMSI used by two ships at once | one serial printed on two parts |
+| `concurrencyWindow` | With `exclusive`: how close in time two claims must be to count as at once. For types that implement `Located`, a claim pair is a conflict only if the implied speed exceeds the type's `maxSpeed` | 10 minutes, with a vessel's 50 knots | a shift, for a part |
+
+Added 2026-11-20 from the Horus evidence ([IDENTITY.md](IDENTITY.md)): `exclusive` and `concurrencyWindow`, because `validity` covers a value moving over time but not two instances using it at once, which AIS shows happening.
 
 The primary key is the entity's own stable id; identity keys are how observations and outside records find it. They are stored in the entity index as identifier rows (entity, scheme, value, valid from and to, source, confidence), which is the crosswalk entity resolution reads and writes.
 
