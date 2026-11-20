@@ -616,6 +616,38 @@ def maintain_lake(cfg: cfgmod.Config, rep: Report, apply: bool) -> int:
     return 0
 
 
+def rebuild_from_raw(cfg: cfgmod.Config, rep: Report, flow: Optional[str], first: Optional[str],
+                     last: Optional[str], apply: bool) -> int:
+    """Rerun a flow's current NiFi script over its raw responses and replace its rows (17.6)."""
+    import lake
+    import rebuild
+    if not (flow and first and last):
+        print(f"rebuild-from-raw: give --flow ({', '.join(rebuild.FLOWS)}), --from and --to (YYYY-MM-DD, UTC)")
+        return 1
+    if not (cfg.workload_user and cfg.workload_password):
+        print("rebuild-from-raw: HORUS_WORKLOAD_USER / HORUS_WORKLOAD_PASSWORD not set")
+        return 1
+    if rep.gateway_env.get("LAKE_ENGINE") != "trino":
+        print("rebuild-from-raw: implemented for Trino warehouses only")
+        return 1
+    cur = lake._cursor(rep.gateway_env["HIVE_HOST"], int(rep.gateway_env["HIVE_PORT"]),
+                       cfg.workload_user, cfg.workload_password, cfg.lake_catalog)
+
+    def run(sql: str) -> list:
+        cur.execute(sql)
+        return cur.fetchall()
+
+    try:
+        rebuild.rebuild(run, cfg.lake_catalog, cfg.database, cfg.table, flow, first, last, apply)
+    except ValueError as e:
+        print(e)
+        return 1
+    if not apply:
+        print("\nDry run. Re-run with --yes to replace the rows. Push a fixed script to NiFi first "
+              "(update-scripts --yes), so new rows are right too.")
+    return 0
+
+
 def migrate_lake(cfg: cfgmod.Config, rep: Report, apply: bool) -> int:
     """Move this instance's events table to lake schema v2 with its history (burndown 16.5)."""
     import lake
@@ -703,14 +735,18 @@ def _print(rep: Report) -> None:
 
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(prog="horus provision")
-    ap.add_argument("command", choices=["status", "create", "update-scripts", "migrate-lake", "maintain-lake"])
+    ap.add_argument("command", choices=["status", "create", "update-scripts", "migrate-lake", "maintain-lake",
+                                        "rebuild-from-raw"])
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     ap.add_argument("--env-file", default=".env")
     ap.add_argument("--yes", action="store_true",
                     help="create: actually create (billable) resources; update-scripts, migrate-lake, "
-                         "maintain-lake: apply")
+                         "maintain-lake, rebuild-from-raw: apply")
     ap.add_argument("--wait", action="store_true", help="create: wait until the Data Hubs are AVAILABLE")
     ap.add_argument("--no-start", action="store_true", help="create: import NiFi flows but leave them stopped")
+    ap.add_argument("--flow", help="rebuild-from-raw: the flow (usgs, firms, nws, hormuznow, ...)")
+    ap.add_argument("--from", dest="first", help="rebuild-from-raw: first day, YYYY-MM-DD (UTC)")
+    ap.add_argument("--to", dest="last", help="rebuild-from-raw: last day, YYYY-MM-DD (UTC); before today")
     args = ap.parse_args(argv)
 
     cfg = cfgmod.load(args.env_file)
@@ -721,6 +757,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         return migrate_lake(cfg, rep, apply=args.yes)
     if args.command == "maintain-lake":
         return maintain_lake(cfg, rep, apply=args.yes)
+    if args.command == "rebuild-from-raw":
+        return rebuild_from_raw(cfg, rep, args.flow, args.first, args.last, apply=args.yes)
     if args.command == "create":
         _print(rep)
         if rep.blocked:

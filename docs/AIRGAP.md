@@ -49,6 +49,7 @@ feed at all.
 | UI, intel resolver, tile server | `registry.npmjs.org` (`npm ci`) | First start of each Application | Bake `node_modules` into the image, or use an internal npm mirror |
 | feeds-gateway | PyPI (`pip install -r requirements.txt`) | Cold start, when modules are missing | Bake the packages into the image, or use an internal PyPI mirror |
 | Provisioner | CDP control plane API; PyPI for `cdpcli` | Provisioning only | CDP Private Cloud control plane |
+| `rebuild-from-raw` | Maven Central (`groovy-4.0.24.jar`, `groovy-json-4.0.24.jar`) | First rebuild in a session only | Copy the two jars into the project and set `GROOVY_JARS_DIR` |
 
 Next.js telemetry is already disabled (`NEXT_TELEMETRY_DISABLED=1` in [launch_ui.py](../ui/launch_ui.py)).
 

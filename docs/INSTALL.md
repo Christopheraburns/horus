@@ -179,6 +179,27 @@ from adding the raw capture branch where it's missing.
   positions) is kept.
 - **Any other change to a flow:** delete its process group in NiFi first (stop
   it and empty its queues), then re-run `create --yes`.
+- **Rows a script got wrong:** fix the script and push it with
+  `update-scripts --yes` first, so new rows are right. Then rebuild the rows
+  already written from the bronze table (the responses as received, kept 30
+  days):
+
+  ```bash
+  python provision/horus.py rebuild-from-raw --flow nws --from 2026-11-18 --to 2026-11-19        # the plan
+  python provision/horus.py rebuild-from-raw --flow nws --from 2026-11-18 --to 2026-11-19 --yes  # replace
+  ```
+
+  It reruns the flow's current script over its raw responses, with each
+  response's received time as the clock, and replaces that flow's rows captured
+  in those days. Only finished days (not today), and never earlier than the
+  flow's first raw response. Rebuilt rows have `ingest_run_id`
+  `rebuild-<flow>-<time>`. Flows: `usgs`, `firms`, `opensky`, `adsblol`,
+  `aisstream`, `hormuznow`, `eonet`, `nws`. A small flow's day takes a minute;
+  an aisstream day (about 4 M messages) takes hours, mostly staging through
+  Trino. Run it in a session: it needs `java` (in the runtimes) and downloads
+  two Groovy jars from Maven Central on first use (set `GROOVY_JARS_DIR` to a
+  folder holding `groovy-4.0.24.jar` and `groovy-json-4.0.24.jar` where there
+  is no internet).
 
 ## 7. Ranger policies (manual, once per instance)
 
