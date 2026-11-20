@@ -383,7 +383,7 @@ never through a browser upload or the Workbench project.
 | ID | Item | Done when | Est | Status |
 |---|---|---|---|---|
 | E1 | Convert the 7 MBTiles to PMTiles and check them: `scripts/to_pmtiles.sh` | The script ends with "All 7 files converted and checked" | 1 | Done (2026-11-19) |
-| E2 | Copy the 7 PMTiles and their `SHA256SUMS` to `<storage-base>/data/horus/<instance>/tiles/` with the AWS CLI | All 8 files listed in the bucket with the right sizes; the tile service's checks pass on them once it reads the bucket (Horus 8.9) | 1 | Todo |
+| E2 | Copy the 7 PMTiles and their `SHA256SUMS` to `<storage-base>/data/horus/<instance>/tiles/` with the AWS CLI | All 8 files listed in the bucket with the right sizes; the tile service's checks pass on them once it reads the bucket (Horus 8.9) | 1 | Done 2026-11-20: in `s3a://applied-ai-buk-d5eff1ab/data/horus/dev/tiles/`. No AWS identity for the CDP account and no USB, so it went by the fallback below (Workbench session, `hdfs dfs -put`); the tile service's checks on the bucket copies wait for 8.9 |
 
 #### E1: how to run it
 
@@ -439,6 +439,29 @@ damaged one. If the first two commands fail, there is no AWS identity with
 access: ask the AWS account owner for one, or copy the files to a CDP gateway
 node and put them from there with the workload credentials (slower; needs
 16 GB on the node).
+
+**What worked for the demo (2026-11-20)**, with neither an AWS identity nor a
+gateway node: upload the files into a Workbench session of the Horus project
+through the browser, check them there, and put them from the session with the
+workload user's credentials (RAZ needs a write policy on the tiles prefix).
+The browser upload fails on the 12.5 GB global file, so split it first and
+stream the parts; nothing is reassembled on disk:
+
+```bash
+# on the workstation
+split -b 2000M -d horus-imagery-global.pmtiles horus-imagery-global.part.
+# in the session, after uploading the 6 other files, SHA256SUMS and the parts
+DEST=s3a://<bucket>/data/horus/<instance>/tiles
+sha256sum -c SHA256SUMS --ignore-missing                 # the 6 regions
+cat horus-imagery-global.part.0* | sha256sum             # must match SHA256SUMS
+hdfs dfs -mkdir -p $DEST
+hdfs dfs -put -d horus-imagery-*.pmtiles SHA256SUMS $DEST/
+cat horus-imagery-global.part.0* | hdfs dfs -put -d - $DEST/horus-imagery-global.pmtiles
+hdfs dfs -ls $DEST/                                      # sizes as on the workstation
+```
+
+`-d` skips the temporary `._COPYING_` file, whose rename on S3 is another full
+copy. Delete the session copies afterwards: project storage is not the tile store.
 
 To check any single file the way the tile service will:
 `python3 ../services/tileserver/tilestore.py FILE`.
