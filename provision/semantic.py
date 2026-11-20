@@ -31,7 +31,7 @@ SOURCE_ID = "lake"
 CONNECTION = "lake"
 # Helios pinned to a commit, installed from git into the session (O0c bakes it into the runtime).
 HELIOS_REPO = "https://github.com/Christopheraburns/helios"
-HELIOS_COMMIT = "6c3ad39"   # Track H to H.10 (Mistral reasoning models)
+HELIOS_COMMIT = "1d4d522"   # Track H to H.11 (reasoning models: max_tokens, reasoning_effort)
 HELIOS_PACKAGES = (("helios-cortex", "[trino,llm]"), ("helios-model", ""))
 
 
@@ -40,10 +40,19 @@ def pip_requirements(commit: str = HELIOS_COMMIT) -> list:
             for name, extras in HELIOS_PACKAGES]
 
 
+# Mistral Large 4 reasons before it answers, and its thinking counts against the answer
+# budget: Helios's default of 4000 tokens was spent entirely on thinking (2026-11-20).
+LLM_MAX_TOKENS = 16000
+LLM_REASONING_EFFORT = "low"     # as the gateway's Pattern of Life; LLM_REASONING_EFFORT overrides
+
+
 def settings_toml(data_dir: str, host: str, port: int, catalog: str, schema: str, user: str,
-                  http_scheme: str = "https", llm_model: Optional[str] = None) -> str:
+                  http_scheme: str = "https", llm_model: Optional[str] = None,
+                  reasoning_effort: Optional[str] = LLM_REASONING_EFFORT) -> str:
     """helios.toml for one instance. No secrets: see env()."""
-    llm = f'\n[llm]\nprovider = "mistral"\nmodel = "{llm_model}"\ntimeout_seconds = 180\n' if llm_model else ""
+    effort = f'reasoning_effort = "{reasoning_effort}"\n' if reasoning_effort else ""
+    llm = (f'\n[llm]\nprovider = "mistral"\nmodel = "{llm_model}"\ntimeout_seconds = 180\n'
+           f'max_tokens = {LLM_MAX_TOKENS}\n{effort}') if llm_model else ""
     return f'''# Written by provision/semantic.py for this Horus instance; regenerated on each run.
 data_dir = "{data_dir}"
 
@@ -145,5 +154,6 @@ def instance_config(instance: str, host: str, port: int, catalog: str, database:
     path = os.path.join(data_dir, "helios.toml")
     with open(path, "w") as f:
         f.write(settings_toml(data_dir, host, port, catalog, lake.views_database(database), user,
-                              llm_model=llm_model))
+                              llm_model=llm_model,
+                              reasoning_effort=os.environ.get("LLM_REASONING_EFFORT") or LLM_REASONING_EFFORT))
     return path
