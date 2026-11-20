@@ -95,9 +95,15 @@ class Bucket:
                 return out
             token = r["NextContinuationToken"]
 
+    def get_range(self, key: str, start: int, end: int) -> tuple[bytes, int, str]:
+        """Bytes start..end (inclusive; S3 shortens a range past the end), the object's
+        size, and its ETag."""
+        r = self.client.get_object(Bucket=self.bucket, Key=key, Range=f"bytes={start}-{end}")
+        total = int(r.get("ContentRange", "/0").rsplit("/", 1)[-1] or 0) or r.get("ContentLength", 0)
+        return r["Body"].read(), total, r.get("ETag", "")
+
     def read_range(self, key: str, offset: int, length: int) -> bytes:
-        r = self.client.get_object(Bucket=self.bucket, Key=key, Range=f"bytes={offset}-{offset + length - 1}")
-        return r["Body"].read()
+        return self.get_range(key, offset, offset + length - 1)[0]
 
     def reader(self, key: str) -> Callable[[int, int], bytes]:
         return lambda offset, length: self.read_range(key, offset, length)

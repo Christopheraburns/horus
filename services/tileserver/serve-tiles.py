@@ -3,8 +3,9 @@
 
 Runtime: Horus Node 22 (runtimes/node). On start it:
 
-1. finds the tile files in the tile store (TILESET_DIR, default this folder;
-   object storage comes with 8.9) and reads each one's own metadata, skipping
+1. finds the tile files in the tile stores (TILESET_DIR: local folders and
+   object storage prefixes such as s3a://<bucket>/data/horus/<instance>/tiles/,
+   separated by commas; default this folder) and reads each one's own metadata, skipping
    any file that can't be served, with a log line saying why;
 2. builds the tile-set registry from those files and tilesets.toml
    (docs/TILESETS.md), skipping entries that fail validation;
@@ -13,6 +14,13 @@ Runtime: Horus Node 22 (runtimes/node). On start it:
    an internal port, streaming its output into this Application's log;
 4. serves the Application's port itself (front_proxy.py): /registry.json for
    the UI, everything else passed to tileserver.
+
+Tile files in object storage reach tileserver through the signing proxy
+(bucket_proxy.py, 127.0.0.1:TILESERVER_BUCKET_PORT only): tileserver reads
+http://127.0.0.1:<port>/<id>.pmtiles, and the proxy reads each byte range from
+the bucket with the Application's own credentials (RAZ on CDP in AWS:
+bucket.py), keeping TILE_CACHE_MB of ranges in memory. The browser never
+reaches the bucket.
 
 Adding a tile file means restarting the Application: tileserver-gl-light
 doesn't reload its config.
@@ -34,6 +42,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 
 
 def log(*a):
@@ -55,20 +64,54 @@ BASEMAP_ID = "horus-basemap"       # the vector basemap the dark style draws
 port = int(os.environ.get("CDSW_APP_PORT", "8090"))
 internal_port = int(os.environ.get("TILESERVER_INTERNAL_PORT", str(port + 1)))
 public_url = os.environ.get("TILESERVER_PUBLIC_URL", "")
-store = os.environ.get("TILESET_DIR", here)
+stores = [s.strip() for s in os.environ.get("TILESET_DIR", here).split(",") if s.strip()]
+bucket_port = int(os.environ.get("TILESERVER_BUCKET_PORT", str(internal_port + 1)))
+cache_mb = int(os.environ.get("TILE_CACHE_MB", "256"))
 
-if store.startswith("s3://") or store.startswith("s3a://"):
-    raise SystemExit(f"TILESET_DIR={store}: object storage is burndown 8.9 (the signing proxy); "
-                     "use a local folder until then")
-
-# 1. Tile files and what they say about themselves.
+# 1. Tile files and what they say about themselves. A store is a local folder or an
+#    object storage prefix (s3a://bucket/prefix/); several are separated by commas.
 files = []
-for id_, path in tilestore.discover(store):
-    meta, problems = tilestore.read_metadata(path)
-    if problems:
-        log(f"SKIP {id_} ({os.path.basename(path)}): {'; '.join(problems)}")
-        continue
-    files.append((id_, path, meta))
+bucket_sources = {}      # id -> bucket_proxy.Source, for the tile files in object storage
+for store in stores:
+    if store.startswith(("s3://", "s3a://")):
+        import bucket as bucketlib   # boto3 (and raz_client on CDP) only when a bucket is used
+        import bucket_proxy
+        try:
+            b = bucketlib.Bucket(store)
+            objects = b.list()
+        except Exception as e:   # noqa: BLE001 -- a store that can't be read is skipped, not fatal
+            log(f"SKIP store {store}: {type(e).__name__}: {e}")
+            continue
+        log(f"store {store}: {len(objects)} object(s)" + (" through RAZ" if b.raz else ""))
+        for key, size in objects:
+            name = key.rsplit("/", 1)[-1]
+            id_, ext = os.path.splitext(name)
+            if ext.lower() == ".mbtiles":
+                log(f"SKIP {id_} ({name}): MBTiles can't be read from object storage; "
+                    "convert it to PMTiles (imagery/scripts/to_pmtiles.sh)")
+                continue
+            if ext.lower() != ".pmtiles":
+                continue
+            try:
+                meta, problems = tilestore.read_pmtiles(b.reader(key))
+            except Exception as e:   # noqa: BLE001
+                meta, problems = {}, [f"unreadable ({type(e).__name__}: {e})"]
+            if problems:
+                log(f"SKIP {id_} ({name}): {'; '.join(problems)}")
+                continue
+            if id_ in bucket_sources:
+                log(f"SKIP {id_} ({store}{name}): a second file with the same id")
+                continue
+            bucket_sources[id_] = bucket_proxy.Source(size, lambda s, e, b=b, k=key: b.get_range(k, s, e))
+            files.append((id_, f"s3://{b.bucket}/{key}", meta))
+    else:
+        for id_, path in tilestore.discover(store):
+            meta, problems = tilestore.read_metadata(path)
+            if problems:
+                log(f"SKIP {id_} ({os.path.basename(path)}): {'; '.join(problems)}")
+                continue
+            files.append((id_, path, meta))
+store = ", ".join(stores)
 
 # 2. The registry.
 reg = registry.build(files, registry.load_config(os.path.join(here, "tilesets.toml")))
@@ -86,7 +129,10 @@ data = {}
 for e in reg["tilesets"]:
     if e["kind"] == "file":
         path = e["source"]["path"]
-        data[e["id"]] = {"pmtiles" if path.lower().endswith(".pmtiles") else "mbtiles": path}
+        if path.startswith("s3://"):   # through the signing proxy, on localhost
+            data[e["id"]] = {"pmtiles": f"http://127.0.0.1:{bucket_port}/{e['id']}.pmtiles"}
+        else:
+            data[e["id"]] = {"pmtiles" if path.lower().endswith(".pmtiles") else "mbtiles": path}
 styles = {}
 if BASEMAP_ID in data:
     styles["dark"] = {"style": "dark/style.json"}
@@ -118,7 +164,23 @@ if public_url:
 else:
     log("WARNING: TILESERVER_PUBLIC_URL not set; tile URLs will follow the request host")
 
-# 4. The front proxy on the Application's port; tileserver behind it.
+# 4. The signing proxy first (tileserver reads each PMTiles header as it starts), then
+#    tileserver, then the front proxy on the Application's port.
+if bucket_sources:
+    used = {e["id"] for e in reg["tilesets"]}
+    sources = {k: v for k, v in bucket_sources.items() if k in used}
+    signing, cache = bucket_proxy.serve(bucket_port, sources, cache_mb * 1024 * 1024, log)
+    threading.Thread(target=signing.serve_forever, daemon=True).start()
+    log(f"signing proxy on 127.0.0.1:{bucket_port}: {len(sources)} tile file(s) from object storage, "
+        f"{cache_mb} MB range cache")
+
+    def report_cache():
+        while True:
+            time.sleep(600)
+            log(f"range cache: {cache.hits} hits, {cache.misses} misses, {cache.size / 1e6:.0f} MB")
+    threading.Thread(target=report_cache, daemon=True).start()
+
+
 log(f"launching tileserver on 127.0.0.1:{internal_port}:", " ".join(args))
 proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
 # 127.0.0.1 on Workbench (0.0.0.0 hangs in "Starting"); the Docker test sets 0.0.0.0.

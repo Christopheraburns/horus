@@ -169,7 +169,8 @@ Re-running `create --yes` doesn't change flows that already exist in NiFi.
 
 ## 7. Ranger policies (manual, once per instance)
 
-The Flink job needs two policies in the Data Lake's Ranger. Create them in
+The Flink job needs two policies in the Data Lake's Ranger, and the tile
+server one. Create them in
 Management Console → environment → Data Lake → **Ranger**. If either is
 missing, the provisioner stops and prints the exact policy to add.
 
@@ -182,6 +183,19 @@ error but never matches, so access is still denied.
 |---|---|---|---|---|
 | Hadoop SQL (`cm_hive`) | database `horus_<instance>`, table `*`, column `*` | `ssb` | All | SSB reads the table definition from the metastore. |
 | S3 (`cm_s3`) | the warehouse bucket, path `/data/warehouse/tablespace/external/hive/horus_<instance>.db`, recursive | your workload user and `ssb` | read, write | The environment uses RAZ, so S3 access is decided by Ranger. SSB (as `ssb`) reads the table metadata when it plans the job, and the job (as you) writes the data files. |
+| S3 (`cm_s3`) | the storage bucket, path `/data/horus/<instance>/tiles`, recursive | the workload user who owns the tile server Application | read | The tile server reads the imagery from the bucket, each byte range signed by RAZ as the Application's user ([services/tileserver/README.md](../services/tileserver/README.md)). Read only: imagery is added by an admin (below), never by the service. |
+
+### Imagery files
+
+The imagery tile files (PMTiles) live in the environment's storage bucket under
+`data/horus/<instance>/tiles/`, never in the Workbench project. Copy them there
+from the machine that has them, with the AWS CLI or, without an AWS identity
+for the account, through a Workbench session with `hdfs dfs -put`
+([imagery/BURNDOWN-IMAGERY.md](../imagery/BURNDOWN-IMAGERY.md), E2). Each file
+also needs a table in
+[services/tileserver/tilesets.toml](../services/tileserver/tilesets.toml) stating
+its licence and marking ([docs/TILESETS.md](TILESETS.md)). Writing to that
+prefix needs its own Ranger S3 write policy for whoever uploads.
 
 ## 8. Flink job
 
@@ -264,7 +278,7 @@ Create them in this order. The UI needs the URLs of the others.
 
 | Application | Script | Runtime | Env vars | Check |
 |---|---|---|---|---|
-| Tile server | `horus/services/tileserver/serve-tiles.py` | Horus Node 22 | `TILESERVER_PUBLIC_URL=https://<tiles>.<domain>/`: this Application's **own** URL, with a trailing slash. A wrong host breaks every glyph, sprite and tile URL in the style. | `/styles/dark/style.json` loads, and every URL in it starts with the tile server's own host |
+| Tile server | `horus/services/tileserver/serve-tiles.py` | Horus Node 22 | `TILESERVER_PUBLIC_URL=https://<tiles>.<domain>/`: this Application's **own** URL, with a trailing slash. A wrong host breaks every glyph, sprite and tile URL in the style. `TILESET_DIR=s3a://<bucket>/data/horus/<instance>/tiles/,/home/cdsw/horus/services/tileserver`: the imagery from the bucket, the basemap from the project folder | `/styles/dark/style.json` loads, and every URL in it starts with the tile server's own host; `/registry.json` lists the basemap and every imagery file; the log has no `SKIP` or `DENIED` lines |
 | Feeds-gateway | `horus/services/feeds-gateway/gateway_startup.py` | PBJ Workbench Python 3.12 | the "Feeds-Gateway variables" that `status` prints, copied exactly; `INTEL_URL=https://<intel>.<domain>` (no slash); the LLM variables below | `/health` lists all five feeds and `kafka.messages` climbs |
 | Intel resolver | `horus/services/intel/launch_intel_resolver.py` | Horus Node 22 | `MEMGRAPH_URL=https://<graph>.<domain>/cypher` (optional) | `/health` shows about 20,000 `sanctions_entries` |
 | Memgraph | `horus/services/memgraph/app.py` | Horus Memgraph | none | `MATCH (n) RETURN count(n)` returns 949256 |
@@ -351,4 +365,6 @@ SSB keytab and the Flink job. To do that, re-run `create --yes`.
 | SSB `Failed to open input stream for file: s3a://…` | The Ranger S3 policy is missing, doesn't list `ssb`, or has a path without the leading `/` (step 7). Ranger → **Audits** shows the denied user and path. |
 | `status` shows the `lake table` row as WARN with 0 rows | Normal until the Flink job has completed its first checkpoint. |
 | Map is blank in both SOURCE modes; browser console shows *blocked by CORS policy* for `style.json` | The tile server is running with `--no-cors`. The current launcher sends CORS headers by default; restart the tile server after `git pull`. |
+| Tile server log: `DENIED reading <id>`, or `SKIP store s3a://…: RazUnauthorizedException` | Ranger refused the tile server's read: the tiles policy in step 7 is missing, names another user, or its path lacks the leading `/`. Ranger → **Audits** → **Access** shows the denied user and path. |
+| Tile server log: `SKIP store s3a://…: ConnectionError: No valid kerberos ticket` | The Application has no Kerberos ticket, so RAZ can't sign. Check the workload password is set for the user who owns the Application, and restart it. |
 | Map is blank; `style.json` loads but glyph, sprite or tile requests go to a different host | The tile server's `TILESERVER_PUBLIC_URL` isn't its own URL. Fix it on the tile server Application and restart. |
