@@ -13,9 +13,9 @@ tables.
 |---|---|
 | `RUN` | The Helios run the current proposal came from |
 | `PROPOSAL.md` | Every proposed element with its confidence and the LLM's rationale, for review |
-| `proposal.json` | The proposal as Helios wrote it |
+| `proposal.json` | The same, as JSON (`helios proposal show --format json`) |
 | `review.json` | The decisions: accept, edit or reject per element (Helios's review format) |
-| `model.json` | The published Ossie document; what O0d publishes on a new instance |
+| `model.yaml` | The published Ossie document (`helios model export`); what O0d publishes on a new instance |
 
 ## Building it (O0b)
 
@@ -25,12 +25,13 @@ feeds-gateway (`LLM_API_KEY`, `LLM_MODEL`):
 
 ```bash
 python provision/horus.py create --yes          # creates the typed views (and anything else missing)
-python provision/horus.py model-propose         # harvest, profile, propose -> PROPOSAL.md, proposal.json, RUN
+python provision/horus.py model-propose         # helios harvest, profile, propose, proposal show
 # review PROPOSAL.md; record decisions in review.json; commit and pull
-python provision/horus.py model-publish         # apply review.json, publish, export model.json
+python provision/horus.py model-publish         # helios publish --review review.json, then helios model export
 ```
 
-The run's working files stay in `~/helios-data/<instance>/` in the session; what
+Both commands only write the instance's `helios.toml` and call the `helios`
+commands, the same ones any Helios user runs. The run's working files stay in `~/helios-data/<instance>/` in the session; what
 matters is committed here. The harvest sends column profiles, including sample
 values, to the LLM.
 

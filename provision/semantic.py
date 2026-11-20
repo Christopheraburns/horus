@@ -10,9 +10,10 @@ same Trino the gateway uses, the same Mistral endpoint) and runs the stages thro
 Helios's own library:
 
     python provision/horus.py model-propose      # harvest, profile, propose; writes the proposal for review
-    python provision/horus.py model-publish      # apply semantic/horus_lake/review.json, publish, export
+    python provision/horus.py model-publish      # publish with semantic/horus_lake/review.json, export model.yaml
 
-Secrets are never written to the settings file: the Trino password and the Mistral
+Everything goes through the ``helios`` command, exactly as any Helios user would run
+it; what Horus adds is only its configuration. Secrets are never written to the settings file: the Trino password and the Mistral
 key reach Helios as HELIOS_* and MISTRAL_* environment variables of the process.
 """
 from __future__ import annotations
@@ -29,8 +30,8 @@ MODEL_ID = "horus_lake"
 SOURCE_ID = "lake"
 CONNECTION = "lake"
 # Helios pinned to a commit, installed from git into the session (O0c bakes it into the runtime).
-HELIOS_REPO = "https://github.com/christopheraburns/helios"
-HELIOS_COMMIT = "0243ef0"
+HELIOS_REPO = "https://github.com/Christopheraburns/helios"
+HELIOS_COMMIT = "25c7676"   # Track H: harvest --table, proposal show, publish --review, model export
 HELIOS_PACKAGES = (("helios-cortex", "[trino,llm]"), ("helios-model", ""))
 
 
@@ -91,86 +92,47 @@ def register(config: str, extra_env: Dict[str, str], views_db: str, log=print) -
         log(f"helios: {' '.join(args[:2])}: {'ok' if not r.returncode else 'already there'}")
 
 
-def summarize(proposals, run_id: str) -> str:
-    """A proposal as Markdown, for review: one row per element, by section."""
-    lines = [f"# Proposed `{MODEL_ID}` (run {run_id})", "",
-             "Every element Helios proposed, with its confidence and the LLM's rationale. Decide each in "
-             "`review.json` (accept, edit, reject), then `python provision/horus.py model-publish`.", ""]
-    by_section: dict = {}
-    for p in proposals:
-        by_section.setdefault(p.section, []).append(p)
-    for section, items in by_section.items():
-        lines += [f"## {section.replace('_', ' ').capitalize()} ({len(items)})", "",
-                  "| id | confidence | what | rationale |", "|---|---|---|---|"]
-        for p in items:
-            what = (getattr(p, "description", "") or getattr(p, "expression", "") or getattr(p, "definition", "")
-                    or getattr(p, "role", "") or "")
-            cell = lambda s, n: str(s or "").replace("\n", " ").replace("|", "\\|")[:n]
-            lines.append(f"| `{p.id}` | {p.confidence:.2f} | {cell(what, 180)} | {cell(p.rationale, 220)} |")
-        lines.append("")
-    return "\n".join(lines)
+def _stage(config: str, extra_env: Dict[str, str], log, *args: str) -> list:
+    """One helios command; returns its stdout lines (the run id first, for the stages)."""
+    r = helios(config, *args, extra_env=extra_env, check=False)
+    for line in r.stderr.splitlines():
+        if line.strip() and not line.startswith("WARNING"):
+            log(f"  {line}")
+    if r.returncode:
+        raise RuntimeError(f"helios {args[0]} failed: {(r.stderr or r.stdout).strip()[-600:]}")
+    return r.stdout.splitlines()
 
 
 def propose(config: str, extra_env: Dict[str, str], views_db: str, log=print) -> str:
-    """Harvest, profile and propose over the typed views; write the proposal for review.
-    Returns the run id."""
-    os.environ.update(extra_env)
-    from helios_cortex.registry import SqlRegistry
-    from helios_cortex.settings import load_settings
-    from helios_model import Catalog, Profiler, Proposer
-
+    """Harvest, profile and propose over the typed views with the helios commands, as any
+    Helios user would, and write the proposal for review. Returns the run id."""
     register(config, extra_env, views_db, log)
-    settings = load_settings(config=config)
-    source = SqlRegistry.from_settings(settings).data_source(SOURCE_ID)
-    harvest = Catalog(settings).harvest(source, None, databases=[views_db], model_id=MODEL_ID)
-    log(f"helios: harvested {len(harvest.tables)} views (run {harvest.run_id})")
-    profile = Profiler(settings).profile(harvest.run_id, None)
-    log(f"helios: profiled: {len(profile.relationships)} relationships verified, "
-        f"{len(profile.suggested_relationships)} for the LLM to decide")
-    proposals = Proposer(settings).propose(profile)
-    log(f"helios: proposed {len(proposals)} elements")
-    run_dir = os.path.join(str(settings.runs_dir or os.path.join(settings.data_dir, "runs")), harvest.run_id)
+    out = _stage(config, extra_env, log, "harvest", "--source", SOURCE_ID, "--database", views_db, "--model", MODEL_ID)
+    run_id = out[0].strip()
+    log(f"helios: {out[-1]} (run {run_id})")
+    log(f"helios: {_stage(config, extra_env, log, 'profile', '--run', run_id)[-1]}")
+    log(f"helios: {_stage(config, extra_env, log, 'propose', '--run', run_id)[-1]}")
     os.makedirs(MODEL_DIR, exist_ok=True)
-    with open(os.path.join(MODEL_DIR, "PROPOSAL.md"), "w") as f:
-        f.write(summarize(proposals, harvest.run_id))
-    src = os.path.join(run_dir, "propose.json")
-    if os.path.exists(src):
-        with open(os.path.join(MODEL_DIR, "proposal.json"), "w") as f:
-            json.dump(json.load(open(src)), f, indent=1, sort_keys=True)
+    _stage(config, extra_env, log, "proposal", "show", "--run", run_id, "--out", os.path.join(MODEL_DIR, "PROPOSAL.md"))
+    _stage(config, extra_env, log, "proposal", "show", "--run", run_id, "--format", "json",
+           "--out", os.path.join(MODEL_DIR, "proposal.json"))
     with open(os.path.join(MODEL_DIR, "RUN"), "w") as f:
-        f.write(harvest.run_id + "\n")
+        f.write(run_id + "\n")
     log("helios: proposal written to semantic/horus_lake/ (PROPOSAL.md, proposal.json, RUN)")
-    return harvest.run_id
+    return run_id
 
 
-def publish(config: str, extra_env: Dict[str, str], publisher: str, log=print) -> str:
+def publish(config: str, extra_env: Dict[str, str], publisher: str, log=print) -> None:
     """Publish the run in semantic/horus_lake/RUN with the decisions in review.json, and
-    export the published model to model.json. Returns the revision id."""
-    os.environ.update(extra_env)
-    from helios_cortex import Caller
-    from helios_cortex.settings import load_settings
-    from helios_model import Proposer, Publisher
-
+    export the published model to model.yaml."""
     run_id = open(os.path.join(MODEL_DIR, "RUN")).read().strip()
     review = os.path.join(MODEL_DIR, "review.json")
     if not os.path.exists(review):
         raise RuntimeError("semantic/horus_lake/review.json is missing: review the proposal first")
-    settings = load_settings(config=config)
-    run_dir = os.path.join(str(settings.runs_dir), run_id)
-    if not os.path.isdir(run_dir):
-        raise RuntimeError(f"run {run_id} is not in {settings.runs_dir}: publish where it was proposed")
-    with open(os.path.join(run_dir, "review.json"), "w") as f:
-        f.write(open(review).read())
-    proposals = Proposer(settings).load(run_id)
-    pending = [p for p in proposals if p.decision == "pending"]
-    if pending:
-        log(f"helios: {len(pending)} element(s) still pending are left out: "
-            + ", ".join(f"{p.section}:{p.id}" for p in pending[:10]) + (" ..." if len(pending) > 10 else ""))
-    publication = Publisher(settings).publish(proposals, Caller(publisher))
-    with open(os.path.join(MODEL_DIR, "model.json"), "w") as f:
-        json.dump(publication.document, f, indent=1, sort_keys=True)
-    log(f"helios: published {MODEL_ID} revision {publication.revision.id}; exported to semantic/horus_lake/model.json")
-    return publication.revision.id
+    for line in _stage(config, extra_env, log, "publish", "--run", run_id, "--review", review, "--as", publisher):
+        log(f"helios: {line}")
+    _stage(config, extra_env, log, "model", "export", MODEL_ID, "--out", os.path.join(MODEL_DIR, "model.yaml"))
+    log("helios: exported to semantic/horus_lake/model.yaml")
 
 
 def instance_config(instance: str, host: str, port: int, catalog: str, database: str, user: str,

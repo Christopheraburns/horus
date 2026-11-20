@@ -107,15 +107,18 @@ else:
                                        http_scheme="http"))
     semantic.register(config, {}, vdb)
     semantic.register(config, {}, vdb, log=lambda *a: None)    # again: already registered is fine
+    # The same helios commands model-propose runs (propose needs the LLM: platform only).
+    out_lines = semantic._stage(config, {}, print, "harvest", "--source", semantic.SOURCE_ID, "--database", vdb,
+                                "--model", semantic.MODEL_ID)
+    run_id = out_lines[0].strip()
+    print(f"  helios harvest {run_id}: {out_lines[-1]}")
+    if out_lines[-1] != f"harvested {len(names)} tables for model {semantic.MODEL_ID}":
+        failures.append(f"Helios harvested: {out_lines[-1]!r}, expected exactly the {len(names)} views")
     settings = load_settings(config=config)
-    source = SqlRegistry.from_settings(settings).data_source(semantic.SOURCE_ID)
-    harvest = Catalog(settings).harvest(source, None, databases=[vdb], model_id=semantic.MODEL_ID)
-    print(f"  helios harvest {harvest.run_id}: {sorted(harvest.tables)}")
-    if sorted(t.split(".")[-1] for t in harvest.tables) != sorted(names):
-        failures.append(f"Helios harvested {sorted(harvest.tables)}, expected exactly the views {sorted(names)}")
-    profile = Profiler(settings).profile(harvest.run_id, None)
-    print(f"  helios profile: {len(profile.relationships)} relationships verified, "
-          f"{len(profile.suggested_relationships)} suggested")
+    tables = Catalog(settings).runs.load(run_id, "harvest")["tables"]
+    if sorted(t["table"] for t in tables) != sorted(names):
+        failures.append(f"harvested {sorted(t['table'] for t in tables)}, expected {sorted(names)}")
+    print(f"  helios profile: {semantic._stage(config, {}, print, 'profile', '--run', run_id)[-1]}")
 
 print("\n".join(f"FAIL {f}" for f in failures) or
       f"ok: {len(names)} views over {n_events} events, every event in one view, typed columns filled; "
