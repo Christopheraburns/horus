@@ -31,7 +31,7 @@ SOURCE_ID = "lake"
 CONNECTION = "lake"
 # Helios pinned to a commit, installed from git into the session (O0c bakes it into the runtime).
 HELIOS_REPO = "https://github.com/Christopheraburns/helios"
-HELIOS_COMMIT = "25c7676"   # Track H: harvest --table, proposal show, publish --review, model export
+HELIOS_COMMIT = "9c710df"   # Track H to H.9 (Mistral greedy sampling)
 HELIOS_PACKAGES = (("helios-cortex", "[trino,llm]"), ("helios-model", ""))
 
 
