@@ -32,6 +32,9 @@ function ageLabel(age: unknown): string {
   return s > STALE_AFTER_S ? `${text} · STALE` : text;
 }
 
+/** Basemap line layers drawn for the dark background only (services/tileserver/styles/dark). */
+const DARK_ONLY_LINES = /^(highway_|road_|railway|aeroway|waterway)/;
+
 /** MapLibre expression: true when a feature's age_s is past STALE_AFTER_S. */
 const IS_STALE: any = ['>', ['coalesce', ['get', 'age_s'], 0], STALE_AFTER_S];
 
@@ -1368,6 +1371,13 @@ function HorusMap({ data, activeLayers, onEntityClick, onMouseCoords, onRightCli
     const map = mapRef.current;
     const on = mapStyle !== 'dark';
     try {
+      // The dark style draws roads, railways, runways and rivers in near-black, which
+      // reads as black tracing over imagery: hide them while imagery shows. Borders and
+      // place names stay.
+      const showing = on && (imagery.length > 0 || allowPublicTiles);
+      for (const l of map.getStyle().layers ?? []) {
+        if (DARK_ONLY_LINES.test(l.id)) map.setLayoutProperty(l.id, 'visibility', showing ? 'none' : 'visible');
+      }
       if (imagery.length) {
         const layers = map.getStyle().layers ?? [];
         const before = layers.find(l => l.type === 'line' || l.type === 'symbol')?.id

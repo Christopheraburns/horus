@@ -633,6 +633,10 @@ export default function Dashboard() {
 
         <span className="flex items-center gap-1">SYS: <span className={backendStatus === 'connected' ? 'text-[var(--alert-green)]' : 'text-[var(--alert-red)]'}>{backendStatus.toUpperCase()}</span></span>
 
+        <span className="flex items-center gap-1" title="Map zoom level. Horus imagery: the six regions to 14, elsewhere to 10">
+          ZOOM: <span className="text-[var(--gold-primary)] font-bold tabular-nums">{mapView.zoom.toFixed(1)}</span>
+        </span>
+
 
 
         <span className="hidden lg:inline-flex items-center gap-1">
@@ -895,10 +899,6 @@ export default function Dashboard() {
                 <span className="text-[var(--cyan-primary)] truncate max-w-[200px]">{locationLabel || 'HOVER MAP'}</span>
               </div>
             )}
-            <div className="flex gap-2 items-center">
-              <span>Z</span>
-              <span className="text-[var(--gold-primary)] font-bold tabular-nums">{mapView.zoom.toFixed(1)}</span>
-            </div>
           </div>
         </motion.div>
       )}
