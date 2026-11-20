@@ -89,7 +89,8 @@ class Bucket:
             if token:
                 kw["ContinuationToken"] = token
             r = self.client.list_objects_v2(**kw)
-            out += [(o["Key"], o["Size"]) for o in r.get("Contents", [])]
+            # Skip folder markers ("<prefix>/", written by hdfs dfs -mkdir and the S3 console).
+            out += [(o["Key"], o["Size"]) for o in r.get("Contents", []) if not o["Key"].endswith("/")]
             if not r.get("IsTruncated"):
                 return out
             token = r["NextContinuationToken"]
